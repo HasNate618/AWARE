@@ -39,9 +39,9 @@ async def speak(text: str) -> None:
             logger.warning("espeak-ng produced no output for: %s", text)
             return
 
-        # Set low volume and play via bluealsa on BT speaker
+        # Set volume and play via bluealsa on BT speaker
         subprocess.run(  # noqa: ASYNC221
-            ["amixer", "-D", "bluealsa", "sset", "TWS Mini Speaker A2DP", "20%"],
+            ["amixer", "-D", "bluealsa", "sset", "TWS Mini Speaker A2DP", "40%"],
             capture_output=True, timeout=3,
         )
         proc = await asyncio.create_subprocess_exec(

@@ -53,6 +53,9 @@ class MockActuatorBus:
         self.leds.append((r, g, b, brightness))
         logger.debug("LED %d -> (%d,%d,%d) @%d", index, r, g, b, brightness)
 
+    async def set_rgb(self, r: int, g: int, b: int) -> None:
+        logger.debug("RGB -> (%d,%d,%d)", r, g, b)
+
     async def play_tone(self, frequency: int, duration_ms: int) -> None:
         self.tones.append((frequency, duration_ms))
         logger.debug("Tone %dHz for %dms", frequency, duration_ms)

@@ -156,6 +156,9 @@ class SerialMCU:
     ) -> None:
         await self._rpc_call("set_led", index, r, g, b, brightness)
 
+    async def set_rgb(self, r: int, g: int, b: int) -> None:
+        await self._rpc_call("set_rgb", r, g, b)
+
     async def play_tone(self, frequency: int, duration_ms: int) -> None:
         await self._rpc_call("play_tone", frequency, duration_ms)
 

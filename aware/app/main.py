@@ -20,7 +20,7 @@ from aware.app.core.loop import RulesLoop
 from aware.app.llm.interface import RuleSpec
 from aware.app.llm.llama import LlamaLLM
 from aware.app.llm.stub import StubLLM
-from aware.app.mcu.bus import SensorBus
+from aware.app.mcu.bus import ActuatorBus, SensorBus
 from aware.app.memory.db import EventDB
 from aware.app.parser.nl_parser import parse_rule
 from aware.app.perception.interface import PerceptionSnapshot, PerceptionSource, SensorCache
@@ -131,7 +131,7 @@ async def sensor_loop(
         pass
 
 
-def action_handler_factory(db: EventDB, bus: EventBus) -> Any:
+def action_handler_factory(db: EventDB, bus: EventBus, actuators: ActuatorBus | None = None) -> Any:
     """Create a handler that logs actions with detection context to the database."""
 
     async def handle_action(event: dict[str, Any]) -> None:
@@ -151,6 +151,29 @@ def action_handler_factory(db: EventDB, bus: EventBus) -> Any:
         if action_type == "speak":
             text = action_params.get("text", "")
             asyncio.create_task(speak_text(text))
+
+        elif action_type in ("led_flash", "led_on") and actuators:
+            rgb_str = action_params.get("rgb", "255,255,255")
+            try:
+                parts = [int(x.strip()) for x in rgb_str.strip("()").split(",")]
+                r, g, b = parts[0], parts[1], parts[2]
+            except Exception:
+                r, g, b = 255, 255, 255
+            if action_type == "led_flash":
+                # Flash 3 times
+                for _ in range(3):
+                    await actuators.set_rgb(r, g, b)
+                    await asyncio.sleep(0.15)
+                    await actuators.set_rgb(0, 0, 0)
+                    await asyncio.sleep(0.15)
+            else:
+                await actuators.set_rgb(r, g, b)
+
+        elif action_type == "led_off" and actuators:
+            await actuators.set_rgb(0, 0, 0)
+
+        elif action_type == "tone" and actuators:
+            await actuators.play_tone(880, 300)
 
         # Build descriptive message
         det_label = detection.get("label", "unknown")
@@ -214,9 +237,6 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     await store.open()
     await engine.start()
 
-    bus.subscribe("action", action_handler_factory(db, bus))
-    bus.subscribe("perception", perception_logger_factory(db))
-
     app.state.bus = bus
     app.state.db = db
     app.state.store = store
@@ -246,6 +266,10 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         "MCU bus: %s",
         "real (arduino-router)" if sensor_bus._connected else "mock fallback",
     )
+
+    # Subscribe handlers (must be after all state is initialized)
+    bus.subscribe("action", action_handler_factory(db, bus, sensor_bus))
+    bus.subscribe("perception", perception_logger_factory(db))
 
     sensor_cache = SensorCache()
 

@@ -81,6 +81,9 @@ ACTIONS: Final[dict[str, dict[str, str]]] = {
     "alert": {"type": "telegram", "param": "text"},
     "sound alarm": {"type": "alarm", "param": ""},
     "alarm": {"type": "alarm", "param": ""},
+    "beep": {"type": "tone", "param": ""},
+    "chime": {"type": "tone", "param": ""},
+    "tone": {"type": "tone", "param": ""},
     "log": {"type": "log", "param": ""},
     "record": {"type": "record", "param": ""},
 }
