@@ -127,6 +127,7 @@ class YOLOCamera:
 
             self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
             self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
+            self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             logger.info("YOLO camera started")
         except ImportError as e:
             logger.error("Missing dependency: %s — falling back to unavailable", e)
@@ -219,6 +220,10 @@ class YOLOCamera:
 
         assert self._cap is not None
         assert self._session is not None
+
+        # Flush stale frames — always process the latest
+        for _ in range(5):
+            self._cap.read()
 
         ret, frame = self._cap.read()
         if not ret or frame is None:
