@@ -215,8 +215,10 @@ This section captures where the project was left off. OpenCode should read this 
 - **Dashboard**: Live MJPEG video, detection log with timestamps, rules, activity log, command input, sensor timeseries charts.
 - **Systemd service**: aware.service installed, enabled, auto-restarts. Working directory /home/arduino/aware.
 - **Real LLM**: llama.cpp server running on board at port 8080 with MiniCPM5-1B Q4_K_M (657MB). Wired via AWARE_LLM_SERVER_URL in .env.
-- **STM32 Modulino temperature**: Working. Real STM32U585 firmware (Arduino_RouterBridge) reads Modulino temp sensor via I2C, exposes `read_temp` RPC through arduino-router. Python SerialMCU calls it and returns 10.23°C to dashboard.
-- **STM32 Modulino distance**: I2C address not yet identified. Falls back to mock (~100cm).
+- **STM32 Modulino temperature**: Working. Real STM32U585 firmware (Arduino_Modulino library) reads Modulino Thermo (HS300x) on Wire1. Exposed as `read_temp` RPC through arduino-router.
+- **STM32 Modulino distance**: Working. Modulino Distance (VL53L4CD) on Wire1. Exposed as `read_distance` RPC (returns mm).
+- **STM32 Modulino accelerometer**: Working. Modulino Movement (LSM6DSOX) on Wire1. Exposed as `accel_x/y/z` RPCs (returns g-values, ~1g on stationary Z axis).
+- **Modulino bus**: Uses `Wire1` on UNO Q (Qwiic connector). All Modulinos connected via daisy-chain Qwiic cable.
 
 ### Board details
 - User: arduino, password: aware2026
