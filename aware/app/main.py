@@ -497,4 +497,5 @@ if __name__ == "__main__":
     import uvicorn
 
     s = get_settings()
-    uvicorn.run("aware.app.main:app", host=s.host, port=s.port, reload=True)
+    reload_enabled = os.environ.get("AWARE_UVICORN_RELOAD", "").lower() in ("1", "true", "yes")
+    uvicorn.run("aware.app.main:app", host=s.host, port=s.port, reload=reload_enabled)
