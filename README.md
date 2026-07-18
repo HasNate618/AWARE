@@ -43,7 +43,7 @@ These show how multiple sensor inputs combine with time conditions and actions �
 
 - **YOLOv8n** (ONNX, 13MB) — object detection at 2Hz. CPU inference via ONNX Runtime.
 - **MiniCPM5-1B Q4** (GGUF, 657MB) — parses natural language commands into rules. Grammar-constrained JSON output ensures valid structure every time.
-- **Audio classifier** — FFT-based sound event detection (doorbell, glass, speech, alarm). Lightweight, no ML model needed. YAMNet model available as upgrade path for better accuracy.
+- **Audio classifier** — YAMNet ONNX (521 sound classes, 16MB) running at ~4Hz. Falls back to lightweight FFT classifier if model unavailable. Mapped 27 relevant classes (doorbell, glass, knock, alarm, siren, dog, speech, baby cry, fire).
 
 ## Decisions
 
@@ -53,7 +53,7 @@ These show how multiple sensor inputs combine with time conditions and actions �
 
 **Grammar-constrained LLM output:** GBNF grammar forces valid JSON every time. Without it, ~30% of LLM outputs are malformed.
 
-**FFT audio over YAMNet:** YAMNet is in the repo but unused — FFT runs in microseconds with zero model loading. Good enough for demo. YAMNet is the upgrade path when accuracy matters.
+**Audio classification:** YAMNet ONNX (521 classes) for robust sound detection. FFT fallback if model unavailable. Energy spike pre-filter avoids running inference on silence.
 
 **SQLite:** No daemon, no port, single file. ACID with WAL mode handles concurrent reads.
 
