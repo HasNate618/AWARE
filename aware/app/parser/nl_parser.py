@@ -13,7 +13,9 @@ class Trigger:
     type: str
     value: str
     time_range: tuple[int, int] | None = None
-    transition: str | None = None  # "enter", "exit", or None for any presence
+    transition: str | None = None
+    sensor_op: str | None = None
+    sensor_threshold: float | None = None
 
 
 @dataclass
@@ -34,7 +36,7 @@ def parse_when(text: str, raw: str | None = None) -> list[Trigger]:
     """Parse when text into triggers. `raw` is the original user input
     (used for transition detection, since the LLM may strip it)."""
     triggers: list[Trigger] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[str] = set()
     lower = text.lower()
     parts = [p.strip() for p in lower.replace(" & ", " and ").split(" and ")]
 
@@ -52,24 +54,44 @@ def parse_when(text: str, raw: str | None = None) -> list[Trigger]:
         # Find sounds in this part
         for keyword, label in vocab.SOUNDS.items():
             if keyword in part_lower:
-                key = ("sound", label, "")
-                if key not in seen:
+                skey = f"sound:{label}"
+                if skey not in seen:
                     triggers.append(Trigger(type="sound", value=label))
-                    seen.add(key)
+                    seen.add(skey)
         # Find objects in this part (with optional transition)
         for keyword, label in vocab.OBJECTS.items():
             if keyword in part_lower:
-                key = ("detection", label, trans or "")
-                if key not in seen:
+                skey = f"detection:{label}:{trans or ''}"
+                if skey not in seen:
                     triggers.append(Trigger(type="detection", value=label, transition=trans))
-                    seen.add(key)
+                    seen.add(skey)
         # Find times in this part
         for keyword, (start, end) in vocab.TIMES.items():
             if keyword in part_lower:
-                key = ("time", keyword, "")
-                if key not in seen:
+                skey = f"time:{keyword}"
+                if skey not in seen:
                     triggers.append(Trigger(type="time", value=keyword, time_range=(start, end)))
-                    seen.add(key)
+                    seen.add(skey)
+        # Find sensor conditions in this part (proximity, temperature, motion)
+        for keyword, (sensor_key, op, default_threshold) in vocab.SENSOR_CONDITIONS.items():
+            if keyword in part_lower:
+                threshold = default_threshold
+                dist_m = vocab._DISTANCE_RE.search(part_lower)
+                if dist_m:
+                    val = int(dist_m.group(1))
+                    unit = dist_m.group(2)
+                    if unit == "m":
+                        val *= 100
+                    elif unit == "mm":
+                        val //= 10
+                    threshold = float(val)
+                skey = f"sensor:{sensor_key}:{op}:{threshold}"
+                if skey not in seen:
+                    triggers.append(Trigger(
+                        type="sensor", value=sensor_key,
+                        sensor_op=op, sensor_threshold=threshold,
+                    ))
+                    seen.add(skey)
     # Also check full text for absolute time patterns
     match = vocab.TIME_RE.search(text)
     if match:
@@ -79,8 +101,8 @@ def parse_when(text: str, raw: str | None = None) -> list[Trigger]:
             hour += 12
         elif ampm == "am" and hour == 12:
             hour = 0
-        key = ("time", f"after {hour}:00", "")
-        if key not in seen:
+        skey = f"time:after_{hour}:00"
+        if skey not in seen:
             triggers.append(Trigger(type="time", value=f"after {hour}:00", time_range=(hour, 24)))
     return triggers
 

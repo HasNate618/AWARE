@@ -16,10 +16,20 @@ class Detection:
 class PerceptionSnapshot:
     detections: list[Detection] = field(default_factory=list)
     sounds: list[Detection] = field(default_factory=list)
-    entered: list[str] = field(default_factory=list)   # labels newly present this frame
-    exited: list[str] = field(default_factory=list)    # labels present last frame, gone now
+    entered: list[str] = field(default_factory=list)
+    exited: list[str] = field(default_factory=list)
+    sensors: dict[str, float] = field(default_factory=dict)
     source: str = "unknown"
     timestamp: float = 0.0
+
+
+@dataclass
+class SensorCache:
+    """Holds latest sensor readings, written by sensor_loop, read by perception_loop."""
+    readings: dict[str, float] = field(default_factory=dict)
+
+    def update(self, sensors: dict[str, float]) -> None:
+        self.readings.update(sensors)
 
 
 @runtime_checkable

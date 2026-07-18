@@ -66,6 +66,7 @@
         .wf-badge.alarm { background: #ff444422; color: #ff4444; }
         .wf-badge.log { background: #66666622; color: #666666; }
         .wf-badge.record { background: #ff00ff22; color: #ff00ff; }
+        .wf-badge.sensor { background: #ff668822; color: #ff6688; }
 
         .trace { font-size: 11px; background: #080808; border: 1px solid #222; border-radius: 4px; padding: 8px 10px; margin-top: 6px; overflow-x: auto; display: none; }
         .trace.show { display: block; }
@@ -272,9 +273,12 @@
             const existing = window._wfExpanded || {};
             list.innerHTML = d.map(r => {
                 const id = 'trace-' + r.name.replace(/[^a-z0-9]/gi, '_');
-                const trigBadges = (r.triggers || []).map(t =>
-                    '<span class="wf-badge ' + t.type + '">' + t.type + ': ' + t.value + (t.time_range ? ' ' + t.time_range[0] + '-' + t.time_range[1] + 'h' : '') + '</span>'
-                ).join(' ');
+                const trigBadges = (r.triggers || []).map(t => {
+                    if (t.type === 'sensor') {
+                        return '<span class="wf-badge sensor">' + t.value + ' ' + (t.sensor_op === 'lt' ? '<' : '>') + ' ' + t.sensor_threshold + '</span>';
+                    }
+                    return '<span class="wf-badge ' + t.type + '">' + t.type + ': ' + t.value + (t.time_range ? ' ' + t.time_range[0] + '-' + t.time_range[1] + 'h' : '') + '</span>';
+                }).join(' ');
                 const actBadges = (r.actions || []).map(a =>
                     '<span class="wf-badge ' + a.type + '">' + a.type + '</span>'
                 ).join(' ');

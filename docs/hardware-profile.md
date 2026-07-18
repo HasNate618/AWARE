@@ -8,21 +8,89 @@
 | GPU | Adreno 702 | 1 CU | 844MHz | OpenCL 3.0 via rusticl (unused) |
 | MCU | STM32U585 | Cortex-M33 | 160MHz | Realtime sensors, actuators |
 | RAM | LPDDR4 | — | — | 4GB (3.6GB usable) |
+| Camera | USB2.0 PC Camera | — | — | `/dev/video0`, 640x480 |
+| Mic | USB camera mic | — | — | 48kHz → 16kHz resample |
+| Speaker | TWS Mini Speaker (BT) | — | — | BlueALSA A2DP, MAC `15:D2:D2:C5:6B:0C` |
 
-## Current Utilization (board live, 22:00 UTC)
+## Pinout & Expansion
+
+### UNO Q Header (discrete GPIO)
 
 ```
-CPU load: 2.98/4.00 (75% utilized, 56% idle)
-  AWARE main process (YOLO + audio + web + rules): 164% CPU
-  llama.cpp server (MiniCPM5-1B Q4_K_M):            8.5% CPU (idle)
-  arduino-router (STM32 bridge):                      0.2% CPU
-GPU: 0% utilization (Adreno 702 available via OpenCL)
-MCU: sensor polling at 2Hz via arduino-router msgpack RPC
+                              ┌──────────────────────┐
+  GPIO_D0  (PB7 )   D0  ◀─▶  │●  ●  ●  ●  ●  ●  ●  ●│  ◀─▶  D1   (PA15) GPIO_D1
+  GPIO_D2  (PC13)   D2  ◀─▶  │●  ●  ●  ●  ●  ●  ●  ●│  ◀─▶  D3   (PB13) GPIO_D3
+  GPIO_D4  (PC1 )   D4  ◀─▶  │●  ●  ●  ●  ●  ●  ●  ●│  ◀─▶  D5   (PB4 ) GPIO_D5 ~PWM
+  GPIO_D6  (PB11)   D6  ◀─▶  │●  ●  ●  ●  ●  ●  ●  ●│  ◀─▶  D7   (PB10) GPIO_D7
+  GPIO_D8  (PB1 )   D8  ◀─▶  │●  ●  ●  ●  ●  ●  ●  ●│  ◀─▶  D9   (PB15) GPIO_D9  ~PWM
+  GPIO_D10 (PC7 )   D10 ◀─▶  │●  ●  ●  ●  ●  RST●  ●│  ◀─▶  D11  (PB0 ) GPIO_D11 ~PWM
+  GPIO_D12 (PB9 )   D12 ◀─▶  │●  ●  ●  ●  ●  ●  ●  ●│  ◀─▶  D13  (PA8 ) GPIO_D13
+                    GND ◀─▶  │●  ●  ●  ●  ●  ●  ●  ●│  ◀─▶  AREF
+                    D14 ◀─▶  │●  ●  ●  ●  ●  ●  ●  ●│  ◀─▶  D15  (PA2 ) A0 ADC
+  GPIO_A1  (PA3 )   D16 ◀─▶  │●  ●  ●  ●  ●  ●  ●  ●│  ◀─▶  D17  (PC0 ) A1 ADC
+  GPIO_A3  (PB14)   D18 ◀─▶  │●  ●  ●  ●  ●  ●  ●  ●│  ◀─▶  D19  (PC2 ) A2 ADC
+                    D20 ◀─▶  │●  ●  ●  ●  ●  ●  ●  ●│  ◀─▶  D21  (PC3 ) A3 ADC
+                              └──────────────────────┘
 ```
 
-Before fix (AWARE_UVICORN_RELOAD=true):
-  CPU load: 3.80/4.00 (96% saturated), 1.9% idle
-  AWARE reloader: 64% CPU (full core wasted on file watching)
+- **PWM-capable**: D5, D9, D11 (marked ~ on silkscreen)
+- **ADC**: A0-A3 (D15, D17, D19, D21)
+- **I2C**: Wire1 on Qwiic connector (SDA=PB3, SCL=PB6) — already used by Modulinos
+- **UART**: `/dev/ttyHS1` ↔ STM32U585 (used by arduino-router)
+
+### Qwiic Connector (already populated)
+```
+3.3V  SDA  SCL  GND
+●────●────●────●
+```
+Modulinos daisy-chained: Thermo (HS300x), Distance (VL53L4CD), Movement (LSM6DSOX), Pixels
+
+### Discrete RGB LED wiring
+Connect common-cathode RGB LED to STM32 GPIO:
+```
+R ──[220Ω]── D5  (PWM, PB4)   or any ~PWM pin
+G ──[220Ω]── D9  (PWM, PB15)
+B ──[220Ω]── D11 (PWM, PB0)
+Cathode ── GND
+```
+Needs STM32 firmware exposing `set_led_pwm(r_pin, g_pin, b_pin, r, g, b)` RPC.
+
+## Sensor Data (currently flowing)
+
+| Sensor | Key | Source | Update rate | Range |
+|---|---|---|---|---|
+| Temperature | `temperature_c` | Modulino Thermo (HS300x) | 2Hz | -40..125°C |
+| Distance | `distance_cm` | Modulino Distance (VL53L4CD) | 2Hz | 0..400cm |
+| Accelerometer X | `accel_x` | Modulino Movement (LSM6DSOX) | 2Hz | ±2/4/8/16g |
+| Accelerometer Y | `accel_y` | Modulino Movement (LSM6DSOX) | 2Hz | ±2/4/8/16g |
+| Accelerometer Z | `accel_z` | Modulino Movement (LSM6DSOX) | 2Hz | ±2/4/8/16g |
+| Movement intensity | `movement_intensity` | Computed from accel deltas | 2Hz | 0..1 |
+
+All sensors currently use **mock fallback data** (STM32 bootloader firmware doesn't register RPC methods yet).
+
+## Trigger conditions available in vocabulary
+
+| Type | Examples | Backend |
+|---|---|---|
+| Detection | `person`, `cat`, `dog`, `car`, `bottle`, `laptop`, ... | YOLOv8n COCO |
+| Sound | `doorbell`, `knock`, `glass_break`, `voice`, ... | Energy-only (generic "sound") |
+| Time | `morning`, `night`, `after 10pm`, `before 6am` | System clock |
+| Transition | `enters`, `leaves`, `arrives`, `exits` | Frame diff |
+| Sensor | `within 1m`, `closer than 50cm`, `farther than 2m`, `near`, `far` | distance_cm |
+| Sensor | `hot`, `warm`, `cold`, `chilly` | temperature_c |
+| Sensor | `moving`, `motion`, `still` | movement_intensity |
+
+## Action types available
+
+| Keyword | Type | Implementation | Status |
+|---|---|---|---|
+| `say`, `speak`, `announce` | speak | espeak-ng → BlueALSA BT | ✅ |
+| `notify`, `alert` | telegram | Backend-agnostic, default dashboard toast | 🏗️ planned |
+| `flash [color]` | led_flash | Modulino Pixels (RPC) — needs STM32 firmware | 🏗️ blocked |
+| `turn on/off [color]` | led_on/led_off | Modulino Pixels (RPC) — needs STM32 firmware | 🏗️ blocked |
+| `sound alarm` | alarm | Planned: TTS + tone combo | ❌ |
+| `record` | record | Planned: save MJPEG clip | ❌ |
+| `log` | log | EventDB (always active) | ✅ |
 
 ## Service → Hardware Distribution
 
@@ -31,54 +99,18 @@ Before fix (AWARE_UVICORN_RELOAD=true):
 ```
 QRB2210 Cortex-A53
 ├── [core 0-3] YOLOv8n ONNX (CPU EP, 320x320, 2Hz)
-├── [core 0-3] Audio FFT classification (5Hz)
+├── [core 0-3] Audio energy event detection (5Hz)
 ├── [core 0-3] FastAPI + MJPEG stream (10FPS)
 ├── [core 0-3] Rules engine (500ms tick)
 ├── [core 0-3] Sensor loop RPC (2Hz)
-└── [core 0-3] SQLite event log
+├── [core 0-3] SQLite event log
+└── [core 0-3] Sensor → snapshot merge
 
 llama.cpp (separate process, ~9%)
 └── MiniCPM5-1B inference (~30s per command)
 
 STM32U585
-└── Sensor polling (temp, distance, accelerometer)
-```
-
-### Recommended
-
-```
-QRB2210 — GPU (Adreno 702 via rusticl OpenCL)
-├── YOLOv8n inference (ONNX OpenCLExecutionProvider)
-│   - FP16 support available
-│   - Integer dot product for quantized ops
-│   - Unified memory = zero-copy input
-│   - Estimated: frees 50-80% CPU
-
-QRB2210 — CPU cores (with affinity)
-├── Core 0: YOLO preprocessing + postprocessing (NMS, box overlay)
-│            MJPEG frame encoding
-├── Core 1: Audio FFT classification (5Hz)
-│            Sensor RPC loop (2Hz)
-├── Core 2: FastAPI request handling
-│            Dashboard static file serving
-│            WebSocket (future)
-├── Core 3: Rules engine (500ms tick)
-│            SQLite event log writes
-│            Action dispatch
-
-llama.cpp server (isolated)
-├── Core 2-3 (shared): MiniCPM5-1B inference
-│            Only busy during NL commands (~30s bursts)
-
-STM32U585 — Realtime MCU
-├── Sensor polling (temp, distance, accelerometer) at 50Hz
-│   → Aggregate → report deltas to MPU every 500ms
-├── Threshold monitoring: fire events on temp > 40°C, distance < 5cm
-│   → Push to MPU without polling
-├── LED pattern engine: "flash green 3x" runs autonomously
-│   → Single RPC "animate(pattern_id)" vs per-frame control
-├── Tone/buzzer: pre-loaded melodies triggered by ID
-└── Health heartbeat: report alive + sensor summary every 1s
+└── Sensor polling (temp, distance, accelerometer) — bootloader only
 ```
 
 ## Key Bottlenecks
@@ -114,58 +146,15 @@ MPU ←→ Unix socket (/var/run/arduino-router.sock) ←→ STM32U585 via /dev/
 Protocol: msgpack RPC (length-prefixed arrays)
 
 Methods:
-  read_temp()       → float °C
-  read_distance()   → float mm (converted to cm ÷10)
-  accel_x/y/z()     → float m/s²
+  read_temp()         → float °C
+  read_distance()     → float mm (converted to cm ÷10)
+  accel_x/y/z()       → float m/s²
   movement_intensity() → float 0-1
   set_led(i, r, g, b, brightness) → void
   play_tone(freq, duration_ms) → void
   set_relay(i, state) → void
-  read_sensor(name) → float (generic fallback)
+  read_sensor(name)   → float (generic fallback)
 ```
 
 Mock fallback (`_MockProvider`) returns jittered defaults when STM32
 methods are not registered or connection fails.
-
-## Qualcomm Track Alignment
-
-### 1. DragonWing CPU (MPU)
-The QRB2210 runs all AI/ML inference, the web server, and the rules engine.
-No cloud services. The quad Cortex-A53 handles YOLO object detection (ONNX Runtime),
-MiniCPM5-1B LLM inference (llama.cpp server), audio classification (NumPy FFT),
-and the FastAPI dashboard — all simultaneously on-device.
-
-### 2. DragonWing GPU (Adreno 702)
-The Adreno 702 is detected via rusticl OpenCL 3.0. Currently unused.
-ONNX Runtime supports OpenCLExecutionProvider — YOLO inference could be
-offloaded to the GPU (FP16 + integer dot product support, unified memory).
-This is future work; the current CPU-only implementation is functional.
-
-### 3. On-device AI
-Three AI models run locally with zero cloud dependency:
-- YOLOv8n (ONNX, 3.2M params) — real-time object detection at 2Hz
-- MiniCPM5-1B (GGUF Q4_K_M) — natural language rule generation via llama.cpp
-- Custom audio classifier — FFT-based sound event detection (doorbell, glass break, speech)
-All models are quantized for edge deployment on 4GB RAM.
-
-### 4. MCU, Realtime
-The STM32U585 reads Modulino sensors (temperature, distance, accelerometer)
-at 2Hz via arduino-router msgpack RPC over Unix socket. The MCU protocol
-supports LED control, tone generation, and relay switching — enabling
-actuator actions without MPU involvement. The `arduino-router` daemon
-bridges the STM32 UART (/dev/ttyHS1) to the MPU via a local socket.
-
-### 5. Specialty
-AWARE is an autonomous agent that perceives its environment through camera,
-microphone, and physical sensors, reasons about events using an on-device LLM,
-and acts through speech, LEDs, and notifications. Users create automations
-by typing natural language commands like "when person enters say welcome" —
-the LLM parses intent, the deterministic NL parser compiles triggers and actions,
-and the rules engine executes them at 500ms intervals. The modular protocol
-architecture (PerceptionSource, SensorBus, ActuatorBus) makes it extensible
-to new hardware without code changes.
-
-### 6. Edge-only Value
-The entire pipeline runs on-device. No internet required. No API keys.
-No data leaves the board. Real-time response (sub-second for sensor triggers,
-~30s for LLM commands). Works offline indefinitely. Privacy by design.

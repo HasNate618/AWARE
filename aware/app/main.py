@@ -23,7 +23,7 @@ from aware.app.llm.stub import StubLLM
 from aware.app.mcu.bus import SensorBus
 from aware.app.memory.db import EventDB
 from aware.app.parser.nl_parser import parse_rule
-from aware.app.perception.interface import PerceptionSnapshot, PerceptionSource
+from aware.app.perception.interface import PerceptionSnapshot, PerceptionSource, SensorCache
 from aware.app.perception.mock_camera import MockCamera
 from aware.app.perception.yamnet import YAMNetMic
 from aware.app.perception.yolo import YOLOCamera
@@ -56,7 +56,8 @@ def perception_logger_factory(db: EventDB) -> Any:
 
 
 async def perception_loop(
-    bus: EventBus, camera: PerceptionSource, mic: YAMNetMic | None = None
+    bus: EventBus, camera: PerceptionSource, mic: YAMNetMic | None = None,
+    sensor_cache: SensorCache | None = None,
 ) -> None:
     """Run camera + mic in background, publishing snapshots to event bus."""
     await camera.start()
@@ -85,6 +86,7 @@ async def perception_loop(
                 sounds=sounds_snap.sounds if sounds_snap else [],
                 entered=list(curr_det_labels - _prev_det_labels),
                 exited=list(_prev_det_labels - curr_det_labels),
+                sensors=dict(sensor_cache.readings) if sensor_cache else {},
                 source=cam_snap.source,
                 timestamp=cam_snap.timestamp,
             )
@@ -103,12 +105,17 @@ async def perception_loop(
 SENSOR_READ_INTERVAL = 0.5  # seconds
 
 
-async def sensor_loop(sensors: SensorBus, bus: EventBus, db: EventDB) -> None:
+async def sensor_loop(
+    sensors: SensorBus, bus: EventBus, db: EventDB,
+    sensor_cache: SensorCache | None = None,
+) -> None:
     """Read sensors periodically and log to DB for timeseries."""
     try:
         while True:
             readings = await sensors.read_all()
+            sensor_data: dict[str, float] = {}
             for r in readings:
+                sensor_data[r.sensor] = r.value
                 await db.log(
                     f"sensor:{r.sensor}",
                     {
@@ -117,6 +124,8 @@ async def sensor_loop(sensors: SensorBus, bus: EventBus, db: EventDB) -> None:
                         "unit": r.unit,
                     },
                 )
+            if sensor_cache is not None:
+                sensor_cache.update(sensor_data)
             await asyncio.sleep(SENSOR_READ_INTERVAL)
     except asyncio.CancelledError:
         pass
@@ -238,9 +247,11 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         "real (arduino-router)" if sensor_bus._connected else "mock fallback",
     )
 
+    sensor_cache = SensorCache()
+
     loop_task = asyncio.create_task(loop.start())
-    camera_task = asyncio.create_task(perception_loop(bus, camera, mic))
-    sensor_task = asyncio.create_task(sensor_loop(sensor_bus, bus, db))
+    camera_task = asyncio.create_task(perception_loop(bus, camera, mic, sensor_cache))
+    sensor_task = asyncio.create_task(sensor_loop(sensor_bus, bus, db, sensor_cache))
     logger.info("AWARE started on %s:%d", settings.host, settings.port)
 
     yield
@@ -405,6 +416,8 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
             "value": t.value,
             "time_range": list(t.time_range) if t.time_range else None,
             "transition": t.transition,
+            "sensor_op": t.sensor_op,
+            "sensor_threshold": t.sensor_threshold,
         }
         for t in parsed.triggers
     ]

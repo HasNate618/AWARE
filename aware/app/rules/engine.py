@@ -123,6 +123,20 @@ class RulesEngine:
             if time_range:
                 start, end = time_range
                 return start <= hour < end
+        elif t_type == "sensor":
+            sensor_key = t_value
+            op: str = trigger.get("sensor_op", "lt")
+            threshold_raw = trigger.get("sensor_threshold")
+            if not isinstance(threshold_raw, (int, float)):
+                return False
+            threshold = float(threshold_raw)
+            reading = snapshot.sensors.get(sensor_key)
+            if reading is None:
+                return False
+            if op == "lt":
+                return reading < threshold
+            elif op == "gt":
+                return reading > threshold
         return False
 
     async def _execute(self, rule: dict[str, object], detection: Detection) -> None:

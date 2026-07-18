@@ -114,3 +114,26 @@ TRANSITIONS: Final[dict[str, str]] = {
     "walks out": "exit",
     "departs": "exit",
 }
+
+# Sensor conditions: keyword -> (sensor_key, operator, default_threshold)
+# Operators: "lt" (less than), "gt" (greater than)
+SENSOR_CONDITIONS: Final[dict[str, tuple[str, str, float]]] = {
+    "within": ("distance_cm", "lt", 100),
+    "closer than": ("distance_cm", "lt", 50),
+    "near": ("distance_cm", "lt", 100),
+    "farther than": ("distance_cm", "gt", 200),
+    "further than": ("distance_cm", "gt", 200),
+    "far": ("distance_cm", "gt", 200),
+    "hot": ("temperature_c", "gt", 30),
+    "warm": ("temperature_c", "gt", 25),
+    "cold": ("temperature_c", "lt", 10),
+    "chilly": ("temperature_c", "lt", 15),
+    "moving": ("movement_intensity", "gt", 0.3),
+    "motion": ("movement_intensity", "gt", 0.3),
+    "still": ("movement_intensity", "lt", 0.05),
+}
+
+_DISTANCE_RE: Final[re.Pattern[str]] = re.compile(
+    r"(?:within|closer than|farther than|further than)\s+(\d+)\s*(cm|m|mm)",
+    re.IGNORECASE,
+)
