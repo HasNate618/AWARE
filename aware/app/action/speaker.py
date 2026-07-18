@@ -40,8 +40,8 @@ async def speak(text: str) -> None:
             return
 
         # Set low volume and play via bluealsa on BT speaker
-        subprocess.run(
-            ["amixer", "-D", "bluealsa", "sset", "TWS Mini Speaker A2DP", "5%"],
+        subprocess.run(  # noqa: ASYNC221
+            ["amixer", "-D", "bluealsa", "sset", "TWS Mini Speaker A2DP", "20%"],
             capture_output=True, timeout=3,
         )
         proc = await asyncio.create_subprocess_exec(
