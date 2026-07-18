@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 
-from aware.app.llm.interface import RuleSpec
+from aware.app.llm.interface import LLMStats, RuleSpec
 
 logger = logging.getLogger(__name__)
 
@@ -16,23 +17,35 @@ _CREATE_RULE_RE = re.compile(
 class StubLLM:
     """Deterministic English -> create_rule. No ML. Always returns the same output."""
 
+    def __init__(self) -> None:
+        self._stats = LLMStats()
+
+    @property
+    def stats(self) -> LLMStats:
+        return self._stats
+
     async def create_rule(self, user_input: str) -> RuleSpec:
+        start = time.monotonic()
         text = user_input.strip().rstrip(".")
         match = _CREATE_RULE_RE.search(text)
         if match:
             when, _verb, then, priority = match.groups()
-            return RuleSpec(
+            result = RuleSpec(
                 name=_slugify(when),
                 when=when.strip(),
                 then=f"{_verb} {then.strip()}",
                 priority=priority or "normal",
             )
-        return RuleSpec(
-            name=_slugify(text[:40]),
-            when=text,
-            then="log event",
-            priority="normal",
-        )
+        else:
+            result = RuleSpec(
+                name=_slugify(text[:40]),
+                when=text,
+                then="log event",
+                priority="normal",
+            )
+        elapsed = (time.monotonic() - start) * 1000
+        self._stats.record(elapsed, True)
+        return result
 
     async def query_memory(self, question: str, context: str) -> str:
         return f"[stub] I would answer: {question}\nContext: {context}"

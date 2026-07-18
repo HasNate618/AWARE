@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 
 import httpx
 
-from aware.app.llm.interface import RuleSpec
+from aware.app.llm.interface import LLMStats, RuleSpec
 
 logger = logging.getLogger(__name__)
 
@@ -96,8 +97,14 @@ class LlamaLLM:
         self.base_url = base_url
         self.model = model
         self.timeout = timeout
+        self._stats = LLMStats()
+
+    @property
+    def stats(self) -> LLMStats:
+        return self._stats
 
     async def create_rule(self, user_input: str) -> RuleSpec:
+        start = time.monotonic()
         prompt = f"{_SYSTEM_PROMPT}\nUser: {user_input}\nOutput: "
         payload = {
             "prompt": prompt,
@@ -112,6 +119,8 @@ class LlamaLLM:
                 resp.raise_for_status()
                 data = resp.json()
         except Exception:
+            elapsed = (time.monotonic() - start) * 1000
+            self._stats.record(elapsed, False)
             logger.exception("LLM request failed")
             return RuleSpec(
                 name=_slugify(user_input[:40]),
@@ -121,10 +130,12 @@ class LlamaLLM:
             )
 
         content = data.get("content", "")
+        elapsed = (time.monotonic() - start) * 1000
         logger.info("LLM response: %s", content)
 
         parsed = _extract_json(content)
         if not parsed:
+            self._stats.record(elapsed, False)
             logger.warning("Failed to parse LLM JSON: %s", content[:200])
             return RuleSpec(
                 name=_slugify(user_input[:40]),
@@ -133,6 +144,8 @@ class LlamaLLM:
                 priority="normal",
                 raw=content[:500],
             )
+
+        self._stats.record(elapsed, True)
 
         when_raw = parsed.get("when", user_input)
         then_raw = parsed.get("then", "log event")

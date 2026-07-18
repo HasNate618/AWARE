@@ -31,7 +31,8 @@ class ParsedRule:
 
 
 def parse_when(text: str, raw: str | None = None) -> list[Trigger]:
-    """Parse when text into triggers. `raw` is the original user input (used for transition detection)."""
+    """Parse when text into triggers. `raw` is the original user input
+    (used for transition detection, since the LLM may strip it)."""
     triggers: list[Trigger] = []
     seen: set[tuple[str, str, str]] = set()
     lower = text.lower()

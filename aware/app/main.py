@@ -493,6 +493,13 @@ async def get_all_timeseries(
     return result
 
 
+@app.get("/api/llm/stats")
+async def llm_stats() -> dict[str, object]:
+    """Return LLM performance statistics."""
+    llm: StubLLM = app.state.llm
+    return llm.stats.to_dict()
+
+
 if __name__ == "__main__":
     import uvicorn
 

@@ -180,6 +180,7 @@
             '<div class="card"><h2>Movement <span style="color:#888;font-size:10px;text-transform:none">intensity</span></h2>' +
             '<div class="chart-period" id="movePeriod"></div><div class="chart-wrap"><canvas id="moveChart"></canvas></div></div>' +
             '<div class="card full"><h2>Activity</h2><ul class="activity-list" id="activityList"><li class="empty">no activity yet</li></ul></div>' +
+            '<div class="card full"><h2>LLM Stats</h2><div id="llmStats" style="font-size:11px;color:#888">loading...</div></div>' +
             '</div>';
         initDashboard();
     }
@@ -430,6 +431,19 @@
             }).join('');
         }
 
+        async function updateLLMStats() {
+            const d = await get('/api/llm/stats');
+            const el = document.getElementById('llmStats');
+            if (!el) return;
+            if (!d) { el.textContent = 'offline'; return; }
+            const rate = (d.success_rate * 100).toFixed(1);
+            el.innerHTML =
+                '<span style="color:#00ff88">' + d.total_calls + ' calls</span>' +
+                ' · <span style="color:#888">' + rate + '% success</span>' +
+                ' · <span style="color:#00bbff">' + d.avg_latency_ms + 'ms avg</span>' +
+                ' · <span style="color:#ff4444">' + d.failed_calls + ' failed</span>';
+        }
+
         setInterval(badge, 2000);
         setInterval(workflows, 3000);
         setInterval(objects, 1000);
@@ -438,12 +452,14 @@
         setInterval(() => upChart(distC, 'sensor:distance_cm', distWindow, distBucket), 2000);
         setInterval(() => upChart(moveC, 'sensor:movement_intensity', moveWindow, moveBucket), 2000);
         setInterval(updateActivity, 2000);
+        setInterval(updateLLMStats, 5000);
 
         badge(); workflows(); objects(); sounds();
         upChart(tempC, 'sensor:temperature_c', tempWindow, tempBucket);
         upChart(distC, 'sensor:distance_cm', distWindow, distBucket);
         upChart(moveC, 'sensor:movement_intensity', moveWindow, moveBucket);
         updateActivity();
+        updateLLMStats();
     }
 </script>
 </body>
