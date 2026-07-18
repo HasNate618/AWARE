@@ -4,11 +4,30 @@ import asyncio
 import logging
 import time
 
+import numpy as np
+
 from aware.app.perception.interface import Detection, PerceptionSnapshot
 
 logger = logging.getLogger(__name__)
 
-# COCO classes YOLOv8 is trained on — map to our vocabulary where possible
+# COCO class names (index → name)
+_COCO_NAMES = [
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train",
+    "truck", "boat", "traffic light", "fire hydrant", "stop sign",
+    "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep",
+    "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella",
+    "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard",
+    "sports ball", "kite", "baseball bat", "baseball glove", "skateboard",
+    "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork",
+    "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+    "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair",
+    "couch", "potted plant", "bed", "dining table", "toilet", "tv",
+    "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave",
+    "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase",
+    "scissors", "teddy bear", "hair drier", "toothbrush",
+]
+
+# Map COCO labels to AWARE vocabulary
 _LABEL_MAP: dict[str, str] = {
     "person": "person",
     "cat": "cat",
@@ -27,35 +46,68 @@ _LABEL_MAP: dict[str, str] = {
 }
 
 
+def _nms(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float = 0.45) -> list[int]:
+    """Simple non-maximum suppression. Returns indices of kept boxes."""
+    if len(boxes) == 0:
+        return []
+    x1 = boxes[:, 0]
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2]
+    y2 = boxes[:, 3]
+    areas = (x2 - x1) * (y2 - y1)
+    order = scores.argsort()[::-1]
+    keep: list[int] = []
+    while order.size > 0:
+        i = order[0]
+        keep.append(int(i))
+        if order.size == 1:
+            break
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+        inter = np.maximum(0, xx2 - xx1) * np.maximum(0, yy2 - yy1)
+        iou = inter / (areas[i] + areas[order[1:]] - inter)
+        inds = np.where(iou <= iou_thresh)[0]
+        order = order[inds + 1]
+    return keep
+
+
 class YOLOCamera:
-    """Real camera + YOLOv8-nano inference. Implements PerceptionSource."""
+    """Real camera + YOLOv8-nano ONNX inference. Implements PerceptionSource."""
 
     def __init__(
         self,
         device: str = "/dev/video2",
-        model_name: str = "yolov8n.pt",
+        model_path: str = "models/yolov8n.onnx",
         confidence: float = 0.5,
         inference_interval: float = 0.5,
         resolution: tuple[int, int] = (320, 240),
     ) -> None:
         self.device = device
-        self.model_name = model_name
+        self.model_path = model_path
         self.confidence = confidence
         self.inference_interval = inference_interval
         self.resolution = resolution
         self._running = False
         self._cap: object | None = None
-        self._model: object | None = None
-        self._last_snapshot: PerceptionSnapshot | None = None
+        self._session: object | None = None
+        self._last_snapshot: PerceptionSnapshot = PerceptionSnapshot(
+            detections=[], sounds=[], source="yolo_unavailable", timestamp=time.time()
+        )
 
     async def start(self) -> None:
         self._running = True
         try:
             import cv2
-            from ultralytics import YOLO
 
-            logger.info("Loading YOLO model: %s", self.model_name)
-            self._model = YOLO(self.model_name)
+            logger.info("Loading YOLO ONNX model: %s", self.model_path)
+            import onnxruntime as ort
+
+            self._session = ort.InferenceSession(
+                self._session_path(), providers=["CPUExecutionProvider"]
+            )
+            logger.info("Model loaded, input: %s", self._session.get_inputs()[0].shape)
 
             logger.info("Opening camera: %s (%dx%d)", self.device, *self.resolution)
             self._cap = cv2.VideoCapture(self.device)
@@ -72,6 +124,16 @@ class YOLOCamera:
         except Exception:
             logger.exception("Failed to start YOLO camera")
 
+    def _session_path(self) -> str:
+        from pathlib import Path
+
+        p = Path(self.model_path)
+        if p.exists():
+            return str(p)
+        # Try relative to project root
+        project_root = Path(__file__).parent.parent.parent.parent
+        return str(project_root / self.model_path)
+
     async def stop(self) -> None:
         self._running = False
         if self._cap is not None:
@@ -85,16 +147,12 @@ class YOLOCamera:
         logger.info("YOLO camera stopped")
 
     async def snapshot(self) -> PerceptionSnapshot:
-        if self._last_snapshot is not None:
-            return self._last_snapshot
-        return PerceptionSnapshot(
-            detections=[], sounds=[], source="yolo_unavailable", timestamp=time.time()
-        )
+        return self._last_snapshot
 
     async def run_inference_loop(self) -> None:
         """Background loop: capture frame, run YOLO, store snapshot."""
         while self._running:
-            if self._cap is None or self._model is None:
+            if self._cap is None or self._session is None:
                 await asyncio.sleep(1.0)
                 continue
             try:
@@ -108,7 +166,7 @@ class YOLOCamera:
         import cv2
 
         assert self._cap is not None
-        assert self._model is not None
+        assert self._session is not None
 
         ret, frame = self._cap.read()
         if not ret or frame is None:
@@ -116,23 +174,65 @@ class YOLOCamera:
                 detections=[], sounds=[], source="yolo", timestamp=time.time()
             )
 
-        results = self._model(frame, verbose=False, conf=self.confidence)
-        detections: list[Detection] = []
+        # Preprocess: resize, BGR→RGB, normalize, NCHW
+        img = cv2.resize(frame, (320, 320))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255.0
+        img = np.transpose(img, (2, 0, 1))  # HWC → CHW
+        blob = np.expand_dims(img, axis=0)  # NCHW
 
-        for r in results:
-            for box in r.boxes:
-                cls_id = int(box.cls[0])
-                raw_label = r.names.get(cls_id, f"cls_{cls_id}")
-                label = _LABEL_MAP.get(raw_label, raw_label)
-                conf = float(box.conf[0])
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                detections.append(
-                    Detection(
-                        label=label,
-                        confidence=round(conf, 3),
-                        bbox=(int(x1), int(y1), int(x2), int(y2)),
-                    )
+        # Inference
+        input_name = self._session.get_inputs()[0].name
+        outputs = self._session.run(None, {input_name: blob})
+        # YOLOv8 output: [1, 84, 3400] → 84 = 4 (xywh) + 80 (class scores)
+        pred = outputs[0][0]  # shape: (84, 3400)
+
+        # Extract boxes and scores
+        boxes_xywh = pred[:4, :].T  # (3400, 4)
+        class_scores = pred[4:, :].T  # (3400, 80)
+
+        # Get best class per detection
+        max_scores = class_scores.max(axis=1)
+        class_ids = class_scores.argmax(axis=1)
+
+        # Confidence filter
+        mask = max_scores >= self.confidence
+        boxes_xywh = boxes_xywh[mask]
+        max_scores = max_scores[mask]
+        class_ids = class_ids[mask]
+
+        if len(max_scores) == 0:
+            return PerceptionSnapshot(
+                detections=[], sounds=[], source="yolo", timestamp=time.time()
+            )
+
+        # Convert xywh → xyxy for NMS
+        x_c, y_c, w, h = boxes_xywh[:, 0], boxes_xywh[:, 1], boxes_xywh[:, 2], boxes_xywh[:, 3]
+        boxes_xyxy = np.stack([x_c - w / 2, y_c - h / 2, x_c + w / 2, y_c + h / 2], axis=1)
+
+        # NMS
+        keep = _nms(boxes_xyxy, max_scores)
+
+        detections: list[Detection] = []
+        frame_h, frame_w = frame.shape[:2]
+        for i in keep:
+            cls_id = int(class_ids[i])
+            raw_label = _COCO_NAMES[cls_id] if cls_id < len(_COCO_NAMES) else f"cls_{cls_id}"
+            label = _LABEL_MAP.get(raw_label, raw_label)
+            conf = float(max_scores[i])
+            x1, y1, x2, y2 = boxes_xyxy[i]
+            # Scale back to original frame coords
+            x1 = int(x1 * frame_w / 320)
+            y1 = int(y1 * frame_h / 320)
+            x2 = int(x2 * frame_w / 320)
+            y2 = int(y2 * frame_h / 320)
+            detections.append(
+                Detection(
+                    label=label,
+                    confidence=round(conf, 3),
+                    bbox=(x1, y1, x2, y2),
                 )
+            )
 
         return PerceptionSnapshot(
             detections=detections,
