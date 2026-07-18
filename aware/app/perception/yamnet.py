@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 from collections import deque
+from typing import Any
 
 import numpy as np
 
@@ -132,6 +133,7 @@ class YAMNetMic:
         self._sound_log: deque[dict[str, object]] = deque(maxlen=200)
         self._stream: object | None = None
         self._audio_queue: deque[np.ndarray] = deque(maxlen=50)
+        self._audio_buffer: list[np.ndarray] = []
 
     async def start(self) -> None:
         self._running = True
@@ -177,7 +179,7 @@ class YAMNetMic:
             # PortAudio requires exact native rate — always use device_rate
 
             # Start audio stream in a thread
-            def audio_callback(indata, frames, time_info, status):
+            def audio_callback(indata: Any, frames: int, time_info: Any, status: Any) -> None:
                 if status:
                     logger.warning("Audio status: %s", status)
                 self._audio_queue.append(indata[:, 0].copy())
@@ -246,18 +248,17 @@ class YAMNetMic:
 
     def _detect(self) -> PerceptionSnapshot:
         """Accumulate audio chunks and classify."""
-        # Accumulate ALL audio from queue
-        chunks: list[np.ndarray] = []
+        # Drain queue into persistent buffer
         while self._audio_queue:
             try:
-                chunks.append(self._audio_queue.popleft())
+                self._audio_buffer.append(self._audio_queue.popleft())
             except IndexError:
                 break
 
-        if not chunks:
+        if not self._audio_buffer:
             return PerceptionSnapshot(detections=[], sounds=[], source="mic", timestamp=time.time())
 
-        audio = np.concatenate(chunks)
+        audio = np.concatenate(self._audio_buffer)
 
         # Resample to 16kHz if needed
         if self.device_rate != self.target_rate:
@@ -275,14 +276,19 @@ class YAMNetMic:
         if len(audio) < chunk_samples:
             return PerceptionSnapshot(detections=[], sounds=[], source="mic", timestamp=time.time())
 
-        # Use the latest chunk_samples
+        # Use the latest chunk_samples, keep the rest in buffer
         audio = audio[-chunk_samples:]
+        # Trim buffer: keep what wasn't used (approximately)
+        used_device_samples = int(self.device_rate * self.chunk_duration)
+        total_device_samples = sum(c.shape[0] for c in self._audio_buffer)
+        if total_device_samples > used_device_samples * 2:
+            self._audio_buffer = self._audio_buffer[-10:]
 
         rms_val = _rms(audio)
         sounds_raw = _classify_sound(audio, self.target_rate, rms_val, self.energy_threshold)
 
         # Always log audio level for debugging
-        classified = [(l, c) for l, c in sounds_raw if l != "silence"]
+        classified = [(label, conf) for label, conf in sounds_raw if label != "silence"]
         if classified:
             logger.info("[sound] rms=%.6f detected=%s", rms_val, classified)
         else:
