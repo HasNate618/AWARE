@@ -2,101 +2,107 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
-    <title>A.W.A.R.E. — Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A.W.A.R.E.</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'SF Mono', 'Fira Code', monospace; background: #0a0a0a; color: #e0e0e0; overflow-x: hidden; width: 100%; }
-        .header { background: #111; border-bottom: 1px solid #333; padding: 10px 16px; display: flex; align-items: center; gap: 10px; width: 100%; }
-        .header h1 { font-size: 16px; color: #00ff88; font-weight: 700; white-space: nowrap; }
-        .header .sub { font-size: 10px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #00ff88; animation: pulse 2s infinite; flex-shrink: 0; }
+        html, body { width: 100%; overflow-x: hidden; font-family: system-ui, 'SF Mono', 'Fira Code', monospace; background: #0a0a0a; color: #e0e0e0; }
+        #app { width: 100%; }
+
+        .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .login-box { background: #111; border: 1px solid #333; border-radius: 16px; padding: 48px 40px 36px; max-width: 400px; width: 100%; text-align: center; }
+
+        .acronym-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin-bottom: 24px; }
+        .acronym-col { display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+        .acronym-col .letter { font-size: 36px; font-weight: 700; color: #00ff88; margin-bottom: 6px; letter-spacing: 0; }
+        .acronym-col span:not(.letter) { font-size: 9px; color: #666; text-transform: lowercase; display: block; }
+        .acronym-col .word { display: flex; flex-direction: column; align-items: center; }
+        .acronym-col .word span { font-size: 9px; line-height: 1.15; color: #555; }
+
+        .login-tagline { color: #555; font-size: 11px; margin-bottom: 28px; letter-spacing: 2px; text-transform: uppercase; }
+        .login-box input { width: 100%; background: #0a0a0a; border: 1px solid #333; border-radius: 8px; padding: 12px 14px; color: #e0e0e0; font-family: inherit; font-size: 15px; margin-bottom: 16px; transition: border-color .15s; }
+        .login-box input:focus { outline: none; border-color: #00ff88; }
+        .login-box .login-btn { width: 100%; background: #00ff88; color: #000; border: none; border-radius: 8px; padding: 12px; font-family: inherit; font-weight: 700; font-size: 15px; cursor: pointer; transition: opacity .15s; }
+        .login-box .login-btn:hover { opacity: .85; }
+
+        .header { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #111; border-bottom: 1px solid #222; width: 100%; }
+        .header h1 { font-size: 15px; color: #00ff88; font-weight: 700; white-space: nowrap; }
+        .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #00ff88; animation: pulse 2s infinite; flex-shrink: 0; }
         .status-dot.offline { background: #ff4444; animation: none; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-        .header-right a { color: #555; text-decoration: none; font-size: 12px; cursor: pointer; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+        .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .header-right span { font-size: 11px; color: #666; }
+        .header-right a { font-size: 11px; color: #555; cursor: pointer; text-decoration: none; }
         .header-right a:hover { color: #ff4444; }
 
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; max-width: 1400px; margin: 0 auto; width: 100%; }
-        @media (max-width: 700px) { .grid { grid-template-columns: 1fr; padding: 6px; gap: 6px; } }
-        .card { background: #111; border: 1px solid #333; border-radius: 8px; padding: 14px; }
-        .card h2 { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
-        .empty { color: #555; font-style: italic; font-size: 12px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; max-width: 1400px; margin: 0 auto; width: 100%; }
+        @media (max-width: 700px) { .grid { grid-template-columns: 1fr; gap: 6px; padding: 6px; } }
+        .card { background: #111; border: 1px solid #2a2a2a; border-radius: 8px; padding: 12px; min-width: 0; }
+        .card h2 { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
         .full { grid-column: 1 / -1; }
         @media (max-width: 700px) { .full { grid-column: 1; } }
+        .empty { color: #444; font-style: italic; font-size: 12px; }
 
         .video-wrap { position: relative; background: #000; border-radius: 4px; overflow: hidden; aspect-ratio: 4/3; max-width: 100%; }
         .video-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; max-width: 100%; }
-        .video-badge { position: absolute; top: 6px; left: 6px; background: #00ff8822; color: #00ff88; padding: 2px 8px; border-radius: 4px; font-size: 10px; }
+        .video-badge { position: absolute; top: 5px; left: 5px; background: #00ff8822; color: #00ff88; padding: 2px 7px; border-radius: 3px; font-size: 10px; }
         .video-badge.offline { background: #ff444422; color: #ff4444; }
 
-        .log-list { list-style: none; max-height: 220px; overflow-y: auto; font-size: 12px; }
-        .log-item { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid #1a1a1a; align-items: center; }
-        .log-time { color: #555; flex-shrink: 0; width: 70px; font-size: 11px; }
-        .log-label { font-weight: 600; flex-shrink: 0; width: 90px; font-size: 12px; }
+        .workflow-list { list-style: none; }
+        .workflow-item { padding: 7px 0; border-bottom: 1px solid #1a1a1a; display: flex; align-items: flex-start; gap: 8px; }
+        .workflow-body { flex: 1; min-width: 0; }
+        .workflow-name { color: #00ff88; font-weight: 600; font-size: 12px; word-break: break-word; }
+        .workflow-desc { color: #777; font-size: 11px; word-break: break-word; margin-top: 2px; }
+        .workflow-del { background: none; border: 1px solid #ff444433; color: #ff4444; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 11px; font-family: inherit; flex-shrink: 0; }
+        .workflow-del:hover { background: #ff444422; }
+
+        .log-list { list-style: none; max-height: 200px; overflow-y: auto; font-size: 12px; }
+        .log-item { display: flex; gap: 6px; padding: 3px 0; border-bottom: 1px solid #181818; align-items: center; }
+        .log-time { color: #444; flex-shrink: 0; width: 65px; font-size: 10px; }
+        .log-label { font-weight: 600; flex-shrink: 0; width: 80px; font-size: 11px; }
         .log-label.object { color: #00ff88; }
         .log-label.sound { color: #ffaa00; }
-        .log-conf { color: #888; flex-shrink: 0; width: 40px; text-align: right; font-size: 11px; }
-        .log-bar { flex: 1; min-width: 30px; height: 4px; background: #1a1a1a; border-radius: 2px; }
+        .log-conf { color: #666; flex-shrink: 0; width: 36px; text-align: right; font-size: 10px; }
+        .log-bar { flex: 1; min-width: 20px; height: 3px; background: #181818; border-radius: 2px; }
         .log-fill { height: 100%; border-radius: 2px; }
         .log-fill.object { background: #00ff88; }
         .log-fill.sound { background: #ffaa00; }
 
-        .command-form { display: flex; gap: 8px; }
-        .command-input { flex: 1; background: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 8px 12px; color: #e0e0e0; font-family: inherit; font-size: 12px; min-width: 0; }
+        .command-form { display: flex; gap: 6px; }
+        .command-input { flex: 1; background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 4px; padding: 8px 10px; color: #e0e0e0; font-family: inherit; font-size: 12px; min-width: 0; }
         .command-input:focus { outline: none; border-color: #00ff88; }
-        .command-btn { background: #00ff88; color: #0a0a0a; border: none; border-radius: 4px; padding: 8px 14px; font-family: inherit; font-weight: 600; cursor: pointer; font-size: 12px; white-space: nowrap; }
-        .command-btn:hover { background: #00cc6a; }
-        .command-feedback { margin-top: 6px; font-size: 11px; color: #00ff88; word-break: break-word; }
+        .command-btn { background: #00ff88; color: #000; border: none; border-radius: 4px; padding: 8px 14px; font-family: inherit; font-weight: 600; cursor: pointer; font-size: 12px; white-space: nowrap; }
+        .command-btn:hover { opacity: .85; }
+        .command-feedback { margin-top: 5px; font-size: 11px; color: #00ff88; word-break: break-word; }
 
-        .chart-wrap { height: 180px; position: relative; }
+        .chart-wrap { height: 160px; position: relative; margin: 0 -2px; }
 
-        /* Workflow cards */
-        .workflow-list { list-style: none; }
-        .workflow-item { padding: 8px 0; border-bottom: 1px solid #222; display: flex; align-items: flex-start; gap: 8px; }
-        .workflow-body { flex: 1; min-width: 0; }
-        .workflow-name { color: #00ff88; font-weight: 600; font-size: 13px; word-break: break-word; }
-        .workflow-desc { color: #888; font-size: 11px; word-break: break-word; }
-        .workflow-del { background: none; border: 1px solid #ff444455; color: #ff4444; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 11px; font-family: inherit; flex-shrink: 0; }
-        .workflow-del:hover { background: #ff444422; }
-
-        .activity-list { list-style: none; max-height: 280px; overflow-y: auto; }
-        .activity-item { padding: 5px 0; border-bottom: 1px solid #1a1a1a; font-size: 11px; display: flex; gap: 6px; align-items: baseline; }
-        .activity-time { color: #555; flex-shrink: 0; width: 70px; font-size: 11px; }
-        .activity-tag { padding: 1px 5px; border-radius: 3px; font-size: 10px; flex-shrink: 0; }
+        .activity-list { list-style: none; max-height: 260px; overflow-y: auto; }
+        .activity-item { padding: 4px 0; border-bottom: 1px solid #181818; font-size: 11px; display: flex; gap: 6px; align-items: baseline; }
+        .activity-time { color: #444; flex-shrink: 0; width: 65px; font-size: 10px; }
+        .activity-tag { padding: 1px 5px; border-radius: 3px; font-size: 9px; flex-shrink: 0; }
         .activity-tag.action { background: #ff880022; color: #ffaa00; }
         .activity-tag.rule { background: #00ff8822; color: #00ff88; }
         .activity-msg { color: #ccc; word-break: break-word; }
 
-        /* Login screen */
-        .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-        .login-box { background: #111; border: 1px solid #333; border-radius: 12px; padding: 40px; max-width: 380px; width: 100%; text-align: center; }
-        .login-box h1 { color: #00ff88; font-size: 28px; margin-bottom: 4px; }
-        .login-box .tagline { color: #555; font-size: 12px; margin-bottom: 30px; }
-        .login-box input { width: 100%; background: #0a0a0a; border: 1px solid #333; border-radius: 6px; padding: 10px 14px; color: #e0e0e0; font-family: inherit; font-size: 14px; margin-bottom: 16px; }
-        .login-box input:focus { outline: none; border-color: #00ff88; }
-        .login-box .login-btn { width: 100%; background: #00ff88; color: #0a0a0a; border: none; border-radius: 6px; padding: 10px; font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer; }
-        .login-box .login-btn:hover { background: #00cc6a; }
-        .login-box .hint { color: #555; font-size: 11px; margin-top: 12px; }
-
         @media (max-width: 700px) {
-            .header { padding: 8px 10px; gap: 6px; }
-            .header h1 { font-size: 14px; }
-            .header .sub { font-size: 9px; }
-            .log-item { flex-wrap: wrap; gap: 3px; }
-            .log-time { width: 55px; font-size: 10px; }
-            .log-label { width: 70px; font-size: 11px; }
-            .header-right a { font-size: 11px; }
-            .card { padding: 10px; }
-            .card h2 { font-size: 11px; }
+            .header { padding: 6px 10px; gap: 6px; }
+            .header h1 { font-size: 13px; }
+            .header-right span { font-size: 10px; }
+            .card { padding: 8px; }
+            .card h2 { font-size: 10px; margin-bottom: 6px; }
             .grid { gap: 6px; padding: 6px; }
+            .log-time { width: 50px; font-size: 9px; }
+            .log-label { width: 60px; font-size: 10px; }
+            .log-item { gap: 4px; flex-wrap: wrap; }
+            .activity-time { width: 50px; font-size: 9px; }
+            .activity-item { flex-wrap: wrap; gap: 4px; }
+            .chart-wrap { height: 130px; }
             .video-wrap { aspect-ratio: 16/9; }
-            .activity-item { flex-wrap: wrap; }
-            .activity-time { width: 55px; font-size: 10px; }
-            .login-box { padding: 24px; }
-            .login-box h1 { font-size: 22px; }
-            .workflow-item { flex-wrap: wrap; }
+            .acronym-col .letter { font-size: 26px; }
+            .acronym-col span:not(.letter), .acronym-col .word span { font-size: 7px; }
+            .login-box { padding: 32px 20px 24px; }
         }
     </style>
 </head>
@@ -106,89 +112,65 @@
 <script>
     const API = window.location.origin;
 
+    const WORDS = ['Autonomous', 'Witness', 'And', 'Response', 'Engine'];
+
+    function acronymHTML() {
+        let html = '<div class="acronym-grid">';
+        for (let i = 0; i < 5; i++) {
+            const word = WORDS[i];
+            html += '<div class="acronym-col"><span class="letter">' + 'AWARE'[i] + '</span><div class="word">';
+            for (const ch of word.toLowerCase()) {
+                html += '<span>' + ch + '</span>';
+            }
+            html += '</div></div>';
+        }
+        html += '</div>';
+        return html;
+    }
+
     function showLogin() {
-        document.getElementById('app').innerHTML = `
-            <div class="login-wrap">
-                <div class="login-box">
-                    <h1>A.W.A.R.E.</h1>
-                    <div class="tagline">Autonomous Witness &amp; Response Engine</div>
-                    <input type="password" id="loginPass" placeholder="password" autofocus>
-                    <button class="login-btn" id="loginBtn">Login</button>
-                    <div class="hint">press Login — no password needed</div>
-                </div>
-            </div>`;
+        document.getElementById('app').innerHTML =
+            '<div class="login-wrap"><div class="login-box">' +
+            acronymHTML() +
+            '<div class="login-tagline">Autonomous Witness And Response Engine</div>' +
+            '<input type="password" id="loginPass" placeholder="password" autofocus>' +
+            '<button class="login-btn" id="loginBtn">Login</button>' +
+            '</div></div>';
         document.getElementById('loginBtn').onclick = () => {
             localStorage.setItem('aware_logged_in', '1');
             showDashboard();
         };
-        document.getElementById('loginPass').onkeydown = (e) => {
-            if (e.key === 'Enter') document.getElementById('loginBtn').click();
-        };
-        document.getElementById('loginPass').focus();
+        const inp = document.getElementById('loginPass');
+        inp.onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('loginBtn').click(); };
+        inp.focus();
     }
 
     function showDashboard() {
-        document.getElementById('app').innerHTML = `
-            <div class="header">
-                <div class="status-dot" id="statusDot"></div>
-                <h1>A.W.A.R.E.</h1>
-                <span class="sub">Autonomous Witness &amp; Response Engine</span>
-                <div class="header-right">
-                    <span id="statusText" style="color:#888;font-size:12px;">connecting...</span>
-                    <a id="logoutLink">logout</a>
-                </div>
-            </div>
-            <div class="grid">
-                <div class="card full">
-                    <h2>Command</h2>
-                    <div class="command-form">
-                        <input type="text" class="command-input" id="commandInput" placeholder='e.g. "when person detected, say hello"'>
-                        <button class="command-btn" id="commandBtn">Teach</button>
-                    </div>
-                    <div class="command-feedback" id="commandFeedback"></div>
-                </div>
-                <div class="card full">
-                    <h2>Camera</h2>
-                    <div class="video-wrap">
-                        <img id="videoFeed" src="${API}/api/video" alt="Camera feed">
-                        <div class="video-badge" id="cameraBadge">connecting...</div>
-                    </div>
-                </div>
-                <div class="card full">
-                    <h2>Workflows</h2>
-                    <ul class="workflow-list" id="workflowList"><li class="empty">no active workflows</li></ul>
-                </div>
-                <div class="card full">
-                    <h2>Object Log</h2>
-                    <ul class="log-list" id="objectLog"><li class="empty">waiting for detections...</li></ul>
-                </div>
-                <div class="card full">
-                    <h2>Sound Log</h2>
-                    <ul class="log-list" id="soundLog"><li class="empty">waiting for sounds...</li></ul>
-                </div>
-                <div class="card">
-                    <h2>Temperature</h2>
-                    <div class="chart-wrap"><canvas id="tempChart"></canvas></div>
-                </div>
-                <div class="card">
-                    <h2>Distance</h2>
-                    <div class="chart-wrap"><canvas id="distChart"></canvas></div>
-                </div>
-                <div class="card full">
-                    <h2>Activity</h2>
-                    <ul class="activity-list" id="activityList"><li class="empty">no activity yet</li></ul>
-                </div>
-            </div>`;
+        document.getElementById('app').innerHTML =
+            '<div class="header">' +
+            '<div class="status-dot" id="statusDot"></div>' +
+            '<h1>A.W.A.R.E.</h1>' +
+            '<div class="header-right">' +
+            '<span id="statusText">connecting</span>' +
+            '<a id="logoutLink">logout</a>' +
+            '</div></div>' +
+            '<div class="grid">' +
+            '<div class="card full"><h2>Command</h2><div class="command-form"><input type="text" class="command-input" id="commandInput" placeholder=\'e.g. "when person detected, say hello"\'>' +
+            '<button class="command-btn" id="commandBtn">Teach</button></div><div class="command-feedback" id="commandFeedback"></div></div>' +
+            '<div class="card full"><h2>Camera</h2><div class="video-wrap"><img id="videoFeed" src="' + API + '/api/video" alt=""><div class="video-badge" id="cameraBadge">connecting</div></div></div>' +
+            '<div class="card full"><h2>Workflows</h2><ul class="workflow-list" id="workflowList"><li class="empty">no active workflows</li></ul></div>' +
+            '<div class="card full"><h2>Object Log</h2><ul class="log-list" id="objectLog"><li class="empty">waiting for detections</li></ul></div>' +
+            '<div class="card full"><h2>Sound Log</h2><ul class="log-list" id="soundLog"><li class="empty">waiting for sounds</li></ul></div>' +
+            '<div class="card"><h2>Temperature</h2><div class="chart-wrap"><canvas id="tempChart"></canvas></div></div>' +
+            '<div class="card"><h2>Distance</h2><div class="chart-wrap"><canvas id="distChart"></canvas></div></div>' +
+            '<div class="card full"><h2>Activity</h2><ul class="activity-list" id="activityList"><li class="empty">no activity yet</li></ul></div>' +
+            '</div>';
         initDashboard();
     }
 
-    if (localStorage.getItem('aware_logged_in')) {
-        showDashboard();
-    } else {
-        showLogin();
-    }
+    if (localStorage.getItem('aware_logged_in')) showDashboard();
+    else showLogin();
 
-    // ---------- Dashboard ----------
     function initDashboard() {
         const API = window.location.origin;
 
@@ -197,175 +179,146 @@
             showLogin();
         };
 
-        async function fetchJSON(path) {
-            try { const r = await fetch(API + path); if (!r.ok) return null; return await r.json(); }
-            catch (e) { return null; }
+        async function get(p) { try { const r = await fetch(API + p); return r.ok ? r.json() : null; } catch (e) { return null; } }
+        function setConn(ok) {
+            const d = document.getElementById('statusDot'), t = document.getElementById('statusText');
+            if (d) d.className = 'status-dot' + (ok ? '' : ' offline');
+            if (t) t.textContent = ok ? 'connected' : 'disconnected';
+        }
+        function ts(t) { return t ? new Date(t * 1000).toLocaleTimeString() : '--'; }
+        function pc(c) { return Math.round(c * 100); }
+
+        async function badge() {
+            const d = await get('/api/snapshot');
+            if (!d) { setConn(false); return; }
+            setConn(true);
+            const b = document.getElementById('cameraBadge');
+            if (!b) return;
+            b.textContent = d.source;
+            b.className = 'video-badge' + (d.source.includes('unavailable') || d.source === 'mock_camera' ? ' offline' : '');
         }
 
-        function setConnected(ok) {
-            const dot = document.getElementById('statusDot');
-            if (dot) { dot.className = 'status-dot' + (ok ? '' : ' offline'); }
-            const txt = document.getElementById('statusText');
-            if (txt) { txt.textContent = ok ? 'connected' : 'disconnected'; }
-        }
-
-        function timeStr(ts) { return ts ? new Date(ts * 1000).toLocaleTimeString() : '--'; }
-        function pct(c) { return Math.round(c * 100); }
-
-        // Camera badge
-        async function updateBadge() {
-            const data = await fetchJSON('/api/snapshot');
-            if (!data) { setConnected(false); return; }
-            setConnected(true);
-            const badge = document.getElementById('cameraBadge');
-            if (!badge) return;
-            badge.textContent = data.source;
-            badge.className = 'video-badge' + (data.source.includes('unavailable') || data.source === 'mock_camera' ? ' offline' : '');
-        }
-
-        // Workflows
-        async function updateWorkflows() {
-            const data = await fetchJSON('/rules');
+        async function workflows() {
+            const d = await get('/rules');
             const list = document.getElementById('workflowList');
             if (!list) return;
-            if (!data || !data.length) { list.innerHTML = '<li class="empty">no active workflows</li>'; return; }
-            list.innerHTML = data.map(r =>
-                '<li class="workflow-item">' +
-                    '<div class="workflow-body">' +
-                        '<div class="workflow-name">' + r.name + '</div>' +
-                        '<div class="workflow-desc">when ' + r.when_text + ' → ' + r.then_text + '</div>' +
-                    '</div>' +
-                    '<button class="workflow-del" data-name="' + r.name + '">delete</button>' +
-                '</li>'
+            if (!d || !d.length) { list.innerHTML = '<li class="empty">no active workflows</li>'; return; }
+            list.innerHTML = d.map(r =>
+                '<li class="workflow-item"><div class="workflow-body"><div class="workflow-name">' + r.name +
+                '</div><div class="workflow-desc">when ' + r.when_text + ' → ' + r.then_text +
+                '</div></div><button class="workflow-del" data-name="' + r.name + '">delete</button></li>'
             ).join('');
-            list.querySelectorAll('.workflow-del').forEach(btn => {
-                btn.onclick = async () => {
-                    const name = btn.dataset.name;
-                    await fetch(API + '/rules/' + encodeURIComponent(name), { method: 'DELETE' });
-                    updateWorkflows();
-                    updateActivity();
+            list.querySelectorAll('.workflow-del').forEach(b => {
+                b.onclick = async () => {
+                    await fetch(API + '/rules/' + encodeURIComponent(b.dataset.name), { method: 'DELETE' });
+                    workflows(); updateActivity();
                 };
             });
         }
 
-        // Object log
-        async function updateObjectLog() {
-            const data = await fetchJSON('/api/objects?limit=50');
+        async function objects() {
+            const d = await get('/api/objects?limit=50');
             const list = document.getElementById('objectLog');
             if (!list) return;
-            if (!data || !data.length) { list.innerHTML = '<li class="empty">waiting for detections...</li>'; return; }
-            list.innerHTML = data.reverse().map(d =>
-                '<li class="log-item"><span class="log-time">' + timeStr(d.timestamp) + '</span><span class="log-label object">' + d.label + '</span><span class="log-conf">' + pct(d.confidence) + '%</span><span class="log-bar"><span class="log-fill object" style="width:' + pct(d.confidence) + '%"></span></span></li>'
+            if (!d || !d.length) { list.innerHTML = '<li class="empty">waiting for detections</li>'; return; }
+            list.innerHTML = d.reverse().map(e =>
+                '<li class="log-item"><span class="log-time">' + ts(e.timestamp) +
+                '</span><span class="log-label object">' + e.label +
+                '</span><span class="log-conf">' + pc(e.confidence) +
+                '%</span><span class="log-bar"><span class="log-fill object" style="width:' + pc(e.confidence) + '%"></span></span></li>'
             ).join('');
         }
 
-        // Sound log
-        async function updateSoundLog() {
-            const data = await fetchJSON('/api/sounds?limit=50');
+        async function sounds() {
+            const d = await get('/api/sounds?limit=50');
             const list = document.getElementById('soundLog');
             if (!list) return;
-            if (!data || !data.length) { list.innerHTML = '<li class="empty">waiting for sounds...</li>'; return; }
-            list.innerHTML = data.reverse().map(d =>
-                '<li class="log-item"><span class="log-time">' + timeStr(d.timestamp) + '</span><span class="log-label sound">' + d.label + '</span><span class="log-conf">' + pct(d.confidence) + '%</span><span class="log-bar"><span class="log-fill sound" style="width:' + pct(d.confidence) + '%"></span></span></li>'
+            if (!d || !d.length) { list.innerHTML = '<li class="empty">waiting for sounds</li>'; return; }
+            list.innerHTML = d.reverse().map(e =>
+                '<li class="log-item"><span class="log-time">' + ts(e.timestamp) +
+                '</span><span class="log-label sound">' + e.label +
+                '</span><span class="log-conf">' + pc(e.confidence) +
+                '%</span><span class="log-bar"><span class="log-fill sound" style="width:' + pc(e.confidence) + '%"></span></span></li>'
             ).join('');
         }
 
-        // Create rule
-        async function createRule() {
-            const input = document.getElementById('commandInput');
-            const cmd = input.value.trim();
+        async function cmd() {
+            const inp = document.getElementById('commandInput');
+            const cmd = inp.value.trim();
             if (!cmd) return;
-            const btn = document.getElementById('commandBtn');
-            const fb = document.getElementById('commandFeedback');
-            btn.textContent = '...';
-            btn.disabled = true;
+            const btn = document.getElementById('commandBtn'), fb = document.getElementById('commandFeedback');
+            btn.textContent = '...'; btn.disabled = true;
             try {
-                const r = await fetch(API + '/api/command', {
-                    method: 'POST',
+                const r = await fetch(API + '/api/command', { method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: cmd })
-                });
-                if (r.ok) {
-                    const resp = await r.json();
-                    input.value = '';
-                    fb.textContent = '✓ Rule "' + resp.rule_name + '" created';
-                    updateWorkflows();
-                    updateActivity();
-                } else { fb.textContent = '✗ Failed'; }
-            } catch (e) { fb.textContent = '✗ Error'; }
-            btn.textContent = 'Teach';
-            btn.disabled = false;
-            setTimeout(() => fb.textContent = '', 3000);
+                    body: JSON.stringify({ command: cmd }) });
+                if (r.ok) { const resp = await r.json(); inp.value = ''; fb.textContent = '✓ "' + resp.rule_name + '" created'; workflows(); updateActivity(); }
+                else fb.textContent = '✗ failed';
+            } catch(e) { fb.textContent = '✗ error'; }
+            btn.textContent = 'Teach'; btn.disabled = false; setTimeout(() => fb.textContent = '', 3000);
         }
 
-        const cmdBtn = document.getElementById('commandBtn');
-        const cmdInput = document.getElementById('commandInput');
-        if (cmdBtn) cmdBtn.onclick = createRule;
-        if (cmdInput) cmdInput.onkeydown = (e) => { if (e.key === 'Enter') createRule(); };
+        const cBtn = document.getElementById('commandBtn'), cInp = document.getElementById('commandInput');
+        if (cBtn) cBtn.onclick = cmd;
+        if (cInp) cInp.onkeydown = e => { if (e.key === 'Enter') cmd(); };
 
-        const videoFeed = document.getElementById('videoFeed');
-        if (videoFeed) videoFeed.onerror = function() { this.src = API + '/api/video?' + Date.now(); };
+        const vf = document.getElementById('videoFeed');
+        if (vf) vf.onerror = function() { this.src = API + '/api/video?' + Date.now(); };
 
-        // Charts
         function makeChart(id, label, color) {
             const el = document.getElementById(id);
             if (!el) return null;
             const ctx = el.getContext('2d');
             return new Chart(ctx, {
                 type: 'line',
-                data: { labels: [], datasets: [{ label, data: [], borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.3, pointRadius: 0 }] },
+                data: { labels: [], datasets: [{ label, data: [], borderColor: color, backgroundColor: color + '18', fill: true, tension: 0.15, pointRadius: 0, borderWidth: 2 }] },
                 options: {
                     responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
-                    scales: {
-                        x: { ticks: { color: '#555', maxTicksLimit: 8, font: { size: 9 } }, grid: { color: '#1a1a1a' } },
-                        y: { ticks: { color: '#555', font: { size: 9 } }, grid: { color: '#1a1a1a' } },
-                    },
+                    scales: { x: { ticks: { color: '#444', maxTicksLimit: 6, font: { size: 8 } }, grid: { color: '#181818' } },
+                             y: { ticks: { color: '#444', font: { size: 8 } }, grid: { color: '#181818' } } },
                     plugins: { legend: { display: false } },
                 },
             });
         }
 
-        const tempChart = makeChart('tempChart', '°C', '#ff4444');
-        const distChart = makeChart('distChart', 'cm', '#0088ff');
+        const tempC = makeChart('tempChart', '°C', '#ff4444');
+        const distC = makeChart('distChart', 'cm', '#0088ff');
 
-        async function updateChart(chart, topic) {
-            if (!chart) return;
-            const data = await fetchJSON('/api/timeseries?topic=' + topic + '&window=3600&bucket=30');
-            if (!data || !data.length) return;
-            chart.data.labels = data.map(d => new Date(d.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-            chart.data.datasets[0].data = data.map(d => d.avg);
-            chart.update();
+        async function upChart(ch, topic) {
+            if (!ch) return;
+            const d = await get('/api/timeseries?topic=' + topic + '&window=3600&bucket=30');
+            if (!d || !d.length) return;
+            ch.data.labels = d.map(x => new Date(x.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            ch.data.datasets[0].data = d.map(x => x.avg);
+            ch.update();
         }
 
-        // Activity
         async function updateActivity() {
-            const data = await fetchJSON('/events?limit=30');
+            const d = await get('/events?limit=30');
             const list = document.getElementById('activityList');
             if (!list) return;
-            if (!data || !data.length) { list.innerHTML = '<li class="empty">no activity yet</li>'; return; }
-            list.innerHTML = data.reverse().map(e => {
-                const d = e.data || {};
+            if (!d || !d.length) { list.innerHTML = '<li class="empty">no activity yet</li>'; return; }
+            list.innerHTML = d.reverse().map(e => {
+                const dd = e.data || {};
                 const cls = e.topic === 'action_executed' ? 'action' : 'rule';
-                const msg = d.message || d.name || JSON.stringify(d).substring(0, 80);
-                return '<li class="activity-item"><span class="activity-time">' + timeStr(e.timestamp) + '</span><span class="activity-tag ' + cls + '">' + e.topic.replace('_', ' ') + '</span><span class="activity-msg">' + msg + '</span></li>';
+                const msg = dd.message || dd.name || JSON.stringify(dd).substring(0, 100);
+                return '<li class="activity-item"><span class="activity-time">' + ts(e.timestamp) +
+                    '</span><span class="activity-tag ' + cls + '">' + e.topic.replace('_', ' ') +
+                    '</span><span class="activity-msg">' + msg + '</span></li>';
             }).join('');
         }
 
-        // Poll loops
-        setInterval(updateBadge, 2000);
-        setInterval(updateWorkflows, 3000);
-        setInterval(updateObjectLog, 1000);
-        setInterval(updateSoundLog, 1000);
-        setInterval(() => updateChart(tempChart, 'sensor:temperature_c'), 5000);
-        setInterval(() => updateChart(distChart, 'sensor:distance_cm'), 5000);
+        setInterval(badge, 2000);
+        setInterval(workflows, 3000);
+        setInterval(objects, 1000);
+        setInterval(sounds, 1000);
+        setInterval(() => upChart(tempC, 'sensor:temperature_c'), 5000);
+        setInterval(() => upChart(distC, 'sensor:distance_cm'), 5000);
         setInterval(updateActivity, 2000);
 
-        updateBadge();
-        updateWorkflows();
-        updateObjectLog();
-        updateSoundLog();
-        updateChart(tempChart, 'sensor:temperature_c');
-        updateChart(distChart, 'sensor:distance_cm');
+        badge(); workflows(); objects(); sounds();
+        upChart(tempC, 'sensor:temperature_c');
+        upChart(distC, 'sensor:distance_cm');
         updateActivity();
     }
 </script>
