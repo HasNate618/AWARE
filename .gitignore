@@ -21,4 +21,6 @@ build/
 *.swp
 *.swo
 *~
-stm32_sketch/
+stm32_sketch/*.elf
+stm32_sketch/*.bin
+stm32_sketch/build/
