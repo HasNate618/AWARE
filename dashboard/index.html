@@ -1,1 +1,213 @@
-<!DOCTYPE html><html><head><title>AWARE</title></head><body><h1>AWARE Dashboard</h1></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWARE Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'SF Mono', 'Fira Code', monospace; background: #0a0a0a; color: #e0e0e0; }
+        .header { background: #111; border-bottom: 1px solid #333; padding: 12px 20px; display: flex; align-items: center; gap: 16px; }
+        .header h1 { font-size: 18px; color: #00ff88; font-weight: 600; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #00ff88; animation: pulse 2s infinite; }
+        .status-dot.offline { background: #ff4444; animation: none; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; max-width: 1200px; margin: 0 auto; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+        .card { background: #111; border: 1px solid #333; border-radius: 8px; padding: 16px; }
+        .card h2 { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+        .detection-list { list-style: none; }
+        .detection-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #222; }
+        .detection-item:last-child { border-bottom: none; }
+        .detection-label { color: #00ff88; font-weight: 600; }
+        .detection-conf { color: #888; font-size: 12px; }
+        .confidence-bar { width: 60px; height: 4px; background: #222; border-radius: 2px; overflow: hidden; margin-left: 8px; display: inline-block; vertical-align: middle; }
+        .confidence-fill { height: 100%; background: #00ff88; border-radius: 2px; transition: width 0.3s; }
+        .empty { color: #555; font-style: italic; font-size: 13px; }
+        .event-list { list-style: none; max-height: 300px; overflow-y: auto; }
+        .event-item { padding: 6px 0; border-bottom: 1px solid #1a1a1a; font-size: 12px; }
+        .event-time { color: #555; margin-right: 8px; }
+        .event-topic { color: #00ff88; margin-right: 8px; }
+        .command-form { display: flex; gap: 8px; margin-top: 12px; }
+        .command-input { flex: 1; background: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 8px 12px; color: #e0e0e0; font-family: inherit; font-size: 13px; }
+        .command-input:focus { outline: none; border-color: #00ff88; }
+        .command-btn { background: #00ff88; color: #0a0a0a; border: none; border-radius: 4px; padding: 8px 16px; font-family: inherit; font-weight: 600; cursor: pointer; }
+        .command-btn:hover { background: #00cc6a; }
+        .rule-list { list-style: none; }
+        .rule-item { padding: 8px 0; border-bottom: 1px solid #222; }
+        .rule-name { color: #00ff88; font-weight: 600; }
+        .rule-when { color: #888; font-size: 12px; }
+        .rule-then { color: #aaa; font-size: 12px; }
+        .camera-status { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .camera-badge { background: #00ff8822; color: #00ff88; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+        .camera-badge.offline { background: #ff444422; color: #ff4444; }
+        .sound-item { color: #ffaa00; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="status-dot" id="statusDot"></div>
+        <h1>AWARE</h1>
+        <span id="statusText" style="color: #888; font-size: 12px;">connecting...</span>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h2>Detections</h2>
+            <div class="camera-status">
+                <span class="camera-badge" id="cameraBadge">--</span>
+                <span style="color: #555; font-size: 11px;" id="snapshotTime">--</span>
+            </div>
+            <ul class="detection-list" id="detectionList">
+                <li class="empty">waiting for camera...</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>Rules</h2>
+            <ul class="rule-list" id="ruleList">
+                <li class="empty">no rules yet</li>
+            </ul>
+            <div class="command-form">
+                <input type="text" class="command-input" id="commandInput"
+                       placeholder="e.g. when person detected, say hello">
+                <button class="command-btn" id="commandBtn">Create</button>
+            </div>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+            <h2>Events</h2>
+            <ul class="event-list" id="eventList">
+                <li class="empty">no events yet</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const API = window.location.origin;
+        let connected = false;
+
+        async function fetchJSON(path) {
+            try {
+                const r = await fetch(API + path);
+                if (!r.ok) throw new Error(r.status);
+                return await r.json();
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function setConnected(ok) {
+            connected = ok;
+            document.getElementById('statusDot').className = 'status-dot' + (ok ? '' : ' offline');
+            document.getElementById('statusText').textContent = ok ? 'connected' : 'disconnected';
+        }
+
+        function confBar(conf) {
+            const pct = Math.round(conf * 100);
+            return `<span class="confidence-bar"><span class="confidence-fill" style="width:${pct}%"></span></span><span class="confidence-conf">${pct}%</span>`;
+        }
+
+        function timeStr(ts) {
+            if (!ts) return '--';
+            return new Date(ts * 1000).toLocaleTimeString();
+        }
+
+        async function updateDetections() {
+            const data = await fetchJSON('/api/snapshot');
+            if (!data) { setConnected(false); return; }
+            setConnected(true);
+
+            const badge = document.getElementById('cameraBadge');
+            badge.textContent = data.source;
+            badge.className = 'camera-badge' + (data.source.includes('unavailable') || data.source === 'mock_camera' ? ' offline' : '');
+            document.getElementById('snapshotTime').textContent = timeStr(data.timestamp);
+
+            const list = document.getElementById('detectionList');
+            const all = [...(data.detections || []), ...(data.sounds || []).map(s => ({...s, _sound: true}))];
+            if (all.length === 0) {
+                list.innerHTML = '<li class="empty">nothing detected</li>';
+                return;
+            }
+            list.innerHTML = all.map(d =>
+                `<li class="detection-item${d._sound ? ' sound-item' : ''}">
+                    <span class="detection-label">${d.label}</span>
+                    ${confBar(d.confidence)}
+                </li>`
+            ).join('');
+        }
+
+        async function updateRules() {
+            const data = await fetchJSON('/rules');
+            if (!data) return;
+            const list = document.getElementById('ruleList');
+            if (data.length === 0) {
+                list.innerHTML = '<li class="empty">no rules yet</li>';
+                return;
+            }
+            list.innerHTML = data.map(r =>
+                `<li class="rule-item">
+                    <div class="rule-name">${r.name}</div>
+                    <div class="rule-when">when: ${r.when_text}</div>
+                    <div class="rule-then">then: ${r.then_text}</div>
+                </li>`
+            ).join('');
+        }
+
+        async function updateEvents() {
+            const data = await fetchJSON('/events?limit=20');
+            if (!data) return;
+            const list = document.getElementById('eventList');
+            if (data.length === 0) {
+                list.innerHTML = '<li class="empty">no events yet</li>';
+                return;
+            }
+            list.innerHTML = data.reverse().map(e =>
+                `<li class="event-item">
+                    <span class="event-time">${new Date(e.timestamp * 1000).toLocaleTimeString()}</span>
+                    <span class="event-topic">${e.topic}</span>
+                    ${e.name || e.rule || ''}
+                </li>`
+            ).join('');
+        }
+
+        async function createRule() {
+            const input = document.getElementById('commandInput');
+            const cmd = input.value.trim();
+            if (!cmd) return;
+            const btn = document.getElementById('commandBtn');
+            btn.textContent = '...';
+            btn.disabled = true;
+            try {
+                const r = await fetch(API + '/api/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: cmd })
+                });
+                if (r.ok) {
+                    input.value = '';
+                    updateRules();
+                    updateEvents();
+                }
+            } catch (e) {}
+            btn.textContent = 'Create';
+            btn.disabled = false;
+        }
+
+        document.getElementById('commandBtn').addEventListener('click', createRule);
+        document.getElementById('commandInput').addEventListener('keydown', e => {
+            if (e.key === 'Enter') createRule();
+        });
+
+        // Poll loops
+        setInterval(updateDetections, 500);
+        setInterval(updateRules, 3000);
+        setInterval(updateEvents, 2000);
+
+        // Initial load
+        updateDetections();
+        updateRules();
+        updateEvents();
+    </script>
+</body>
+</html>

@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from aware.app.config import get_settings, setup_logging
@@ -16,7 +18,9 @@ from aware.app.llm.llama import LlamaLLM
 from aware.app.llm.stub import StubLLM
 from aware.app.memory.db import EventDB
 from aware.app.parser.nl_parser import parse_rule
+from aware.app.perception.interface import PerceptionSource
 from aware.app.perception.mock_camera import MockCamera
+from aware.app.perception.yolo import YOLOCamera
 from aware.app.rules.engine import RulesEngine
 from aware.app.rules.store import RulesStore
 
@@ -25,9 +29,12 @@ logger = logging.getLogger(__name__)
 MOCK_SNAPSHOT_INTERVAL = 0.5  # seconds
 
 
-async def perception_loop(bus: EventBus, camera: MockCamera) -> None:
-    """Run mock camera in background, publishing snapshots to event bus."""
+async def perception_loop(bus: EventBus, camera: PerceptionSource) -> None:
+    """Run camera in background, publishing snapshots to event bus."""
     await camera.start()
+    # If YOLO camera, run its inference loop in parallel
+    if isinstance(camera, YOLOCamera):
+        asyncio.create_task(camera.run_inference_loop())
     try:
         while True:
             snapshot = await camera.snapshot()
@@ -62,9 +69,21 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     bus = EventBus()
     db = EventDB(settings.db_path)
     store = RulesStore(settings.db_path)
-    camera = MockCamera()
     engine = RulesEngine(store, bus, db)
     loop = RulesLoop(engine, bus, settings.rules_tick_ms)
+
+    # Auto-detect camera: use YOLO if device exists, else mock
+    camera_device = Path(settings.camera_device)
+    if camera_device.exists():
+        camera: PerceptionSource = YOLOCamera(
+            device=settings.camera_device,
+            confidence=0.5,
+            inference_interval=0.5,
+        )
+        logger.info("Using YOLO camera on %s", settings.camera_device)
+    else:
+        camera = MockCamera()
+        logger.info("Camera %s not found — using mock", settings.camera_device)
 
     # Choose LLM: stub (instant, deterministic) or real (llama.cpp server)
     if settings.llm_server_url:
@@ -85,6 +104,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     app.state.store = store
     app.state.engine = engine
     app.state.llm = llm
+    app.state.camera = camera
 
     loop_task = asyncio.create_task(loop.start())
     camera_task = asyncio.create_task(perception_loop(bus, camera))
@@ -102,10 +122,39 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 
 app = FastAPI(title="AWARE", version="0.1.0", lifespan=lifespan)
 
+# Serve dashboard as static files
+_dashboard_dir = Path(__file__).parent.parent.parent / "dashboard"
+if _dashboard_dir.exists():
+    app.mount("/dashboard", StaticFiles(directory=str(_dashboard_dir), html=True), name="dashboard")
+
+
+@app.get("/")
+async def root() -> dict[str, str]:
+    return {"status": "ok", "dashboard": "/dashboard/index.html"}
+
 
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/snapshot")
+async def get_snapshot() -> dict[str, object]:
+    """Get the latest perception snapshot from the camera."""
+    camera: PerceptionSource = app.state.camera
+    snap = await camera.snapshot()
+    return {
+        "source": snap.source,
+        "timestamp": snap.timestamp,
+        "detections": [
+            {"label": d.label, "confidence": d.confidence, "bbox": d.bbox}
+            for d in snap.detections
+        ],
+        "sounds": [
+            {"label": s.label, "confidence": s.confidence}
+            for s in snap.sounds
+        ],
+    }
 
 
 @app.get("/events")
