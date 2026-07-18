@@ -12,139 +12,11 @@ from aware.app.perception.interface import Detection, PerceptionSnapshot
 
 logger = logging.getLogger(__name__)
 
-# Sound event labels we detect
-SOUND_LABELS = [
-    "glass_break",
-    "doorbell",
-    "knock",
-    "speech",
-    "alarm",
-    "siren",
-    "dog_bark",
-    "cat_meow",
-    "silence",
-    "ambient",
-]
-
-# Frequency ranges (Hz) for different sound types
-_FREQ_RANGES: dict[str, tuple[int, int]] = {
-    "glass_break": (2000, 8000),
-    "doorbell": (800, 2000),
-    "knock": (200, 800),
-    "speech": (300, 3400),
-    "alarm": (1000, 4000),
-    "siren": (500, 3000),
-    "dog_bark": (300, 1500),
-    "cat_meow": (600, 2000),
-}
+_SOUND_LABELS = ["sound", "silence"]
 
 
 def _rms(audio: np.ndarray) -> float:
-    """Root mean square energy."""
     return float(np.sqrt(np.mean(audio.astype(np.float64) ** 2)))
-
-
-def _spectral_centroid(audio: np.ndarray, sr: int) -> float:
-    """Dominant frequency centroid."""
-    fft = np.abs(np.fft.rfft(audio))
-    freqs = np.fft.rfftfreq(len(audio), 1.0 / sr)
-    total = fft.sum()
-    if total < 1e-10:
-        return 0.0
-    return float(np.sum(freqs * fft) / total)
-
-
-def _dominant_freq(audio: np.ndarray, sr: int) -> tuple[float, float]:
-    """Return (dominant_freq_hz, strength) where strength is 0-1."""
-    fft = np.abs(np.fft.rfft(audio))
-    freqs = np.fft.rfftfreq(len(audio), 1.0 / sr)
-    # Ignore DC and very low frequencies
-    mask = freqs > 100
-    if not mask.any():
-        return (0.0, 0.0)
-    fft_masked = fft[mask]
-    freqs_masked = freqs[mask]
-    peak_idx = fft_masked.argmax()
-    peak_freq = freqs_masked[peak_idx]
-    peak_val = fft_masked[peak_idx]
-    # Strength = how much the peak stands out above the noise floor
-    median_val = np.median(fft_masked)
-    if median_val < 1e-10:
-        return (float(peak_freq), 0.0)
-    snr = peak_val / median_val  # signal-to-noise ratio
-    # Map SNR to 0-1: SNR of 3 = weak (0.3), SNR of 10 = strong (0.8), SNR of 20+ = very strong (1.0)
-    strength = min(max((snr - 2) / 15, 0.0), 1.0)
-    return (float(peak_freq), float(strength))
-
-
-def _band_energy(audio: np.ndarray, sr: int, fmin: int, fmax: int) -> float:
-    """Fraction of total energy in a frequency band (0-1)."""
-    fft = np.abs(np.fft.rfft(audio))
-    freqs = np.fft.rfftfreq(len(audio), 1.0 / sr)
-    total_energy = np.sum(fft ** 2)
-    if total_energy < 1e-10:
-        return 0.0
-    band_mask = (freqs >= fmin) & (freqs <= fmax)
-    band_energy = np.sum(fft[band_mask] ** 2)
-    return float(band_energy / total_energy)
-
-
-def _classify_sound(
-    audio: np.ndarray, sr: int, rms: float, energy_threshold: float
-) -> list[tuple[str, float]]:
-    """Classify audio chunk into sound events with confidence scores."""
-    if rms < energy_threshold:
-        return [("silence", 0.9)]
-
-    dom_freq, dom_strength = _dominant_freq(audio, sr)
-    norm_energy = min(rms / (energy_threshold * 5), 1.0)
-
-    # Only classify if we have a clear spectral peak
-    if dom_strength < 0.2:
-        return [("ambient", round(norm_energy * 0.5, 3))]
-
-    detections: list[tuple[str, float]] = []
-
-    for label, (fmin, fmax) in _FREQ_RANGES.items():
-        # Peak must be within the frequency range
-        if fmin <= dom_freq <= fmax:
-            # Also check that significant energy is in this band
-            band_frac = _band_energy(audio, sr, fmin, fmax)
-            if band_frac < 0.15:
-                continue  # Not enough energy in this band
-            # Confidence: strong peak + high energy + good band match
-            conf = dom_strength * 0.5 + norm_energy * 0.2 + band_frac * 0.3
-            if conf > 0.35:
-                detections.append((label, round(conf, 3)))
-
-    # Speech: check for harmonic structure (voice has harmonics at ~100-300Hz spacing)
-    if 200 < dom_freq < 4000 and norm_energy > 0.15:
-        fft = np.abs(np.fft.rfft(audio))
-        freqs = np.fft.rfftfreq(len(audio), 1.0 / sr)
-        # Look for harmonics: peaks at f0, 2*f0, 3*f0 where f0 ~ 80-300Hz
-        speech_score = 0
-        for f0 in [100, 150, 200, 250]:
-            harmonic_strength = 0
-            for h in range(1, 5):
-                h_freq = f0 * h
-                h_idx = np.argmin(np.abs(freqs - h_freq))
-                if h_idx < len(fft):
-                    harmonic_strength += fft[h_idx]
-            if harmonic_strength > 0:
-                speech_score = max(speech_score, harmonic_strength / (fft.sum() + 1e-10))
-        if speech_score > 0.01:
-            detections.append(("speech", round(min(speech_score * 20, 0.9), 3)))
-
-    if not detections:
-        return [("ambient", round(norm_energy * 0.3, 3))]
-
-    # Return top detection only
-    detections.sort(key=lambda x: x[1], reverse=True)
-    return [detections[0]]
-
-    # Sort by confidence, return top 3
-    detections.sort(key=lambda x: x[1], reverse=True)
-    return detections[:3]
 
 
 class YAMNetMic:
@@ -172,6 +44,9 @@ class YAMNetMic:
         self._stream: Any = None
         self._audio_queue: deque[np.ndarray] = deque(maxlen=50)
         self._audio_buffer: list[np.ndarray] = []
+        self._baseline_rms: float = 0.0
+        self._last_event_time: float = 0.0
+        self._event_cooldown: float = 2.0
 
     async def start(self) -> None:
         self._running = True
@@ -285,8 +160,7 @@ class YAMNetMic:
             await asyncio.sleep(self.detection_interval)
 
     def _detect(self) -> PerceptionSnapshot:
-        """Accumulate audio chunks and classify."""
-        # Drain queue into persistent buffer
+        """Accumulate audio chunks and detect sound events."""
         while self._audio_queue:
             try:
                 self._audio_buffer.append(self._audio_queue.popleft())
@@ -297,8 +171,6 @@ class YAMNetMic:
             return PerceptionSnapshot(detections=[], sounds=[], source="mic", timestamp=time.time())
 
         audio = np.concatenate(self._audio_buffer)
-
-        # Resample to 16kHz if needed
         if self.device_rate != self.target_rate:
             ratio = self.target_rate / self.device_rate
             new_len = int(len(audio) * ratio)
@@ -309,38 +181,42 @@ class YAMNetMic:
             ).astype(np.float32)
 
         chunk_samples = int(self.target_rate * self.chunk_duration)
-
-        # Need at least chunk_samples for analysis
         if len(audio) < chunk_samples:
             return PerceptionSnapshot(detections=[], sounds=[], source="mic", timestamp=time.time())
 
-        # Use the latest chunk_samples, keep the rest in buffer
         audio = audio[-chunk_samples:]
-        # Trim buffer: keep what wasn't used (approximately)
         used_device_samples = int(self.device_rate * self.chunk_duration)
         total_device_samples = sum(c.shape[0] for c in self._audio_buffer)
         if total_device_samples > used_device_samples * 2:
             self._audio_buffer = self._audio_buffer[-10:]
 
         rms_val = _rms(audio)
-        sounds_raw = _classify_sound(audio, self.target_rate, rms_val, self.energy_threshold)
 
-        # Always log audio level for debugging
-        classified = [(label, conf) for label, conf in sounds_raw if label != "silence"]
-        if classified:
-            logger.info("[sound] rms=%.6f detected=%s", rms_val, classified)
+        # Track baseline with exponential moving average
+        if self._baseline_rms == 0.0:
+            self._baseline_rms = rms_val
         else:
-            logger.info("[sound] rms=%.6f threshold=%.5f silence", rms_val, self.energy_threshold)
+            self._baseline_rms = self._baseline_rms * 0.9 + rms_val * 0.1
 
-        sounds = [
-            Detection(label=label, confidence=conf)
-            for label, conf in sounds_raw
-            if label != "silence"
-        ]
+        # Only report on energy spikes (2x baseline)
+        ratio = rms_val / (self._baseline_rms + 1e-10)
+        now = time.time()
+        cooldown_ok = (now - self._last_event_time) > self._event_cooldown
+
+        if ratio > 2.0 and cooldown_ok:
+            self._last_event_time = now
+            conf = min(ratio / 5.0, 0.95)
+            sound = Detection(label="sound", confidence=round(conf, 3))
+            self._sound_log.append({
+                "label": "sound",
+                "confidence": conf,
+                "timestamp": now,
+            })
+            logger.info("[sound] event rms=%.5f baseline=%.5f ratio=%.1f", rms_val, self._baseline_rms, ratio)
+            return PerceptionSnapshot(
+                detections=[], sounds=[sound], source="mic", timestamp=now,
+            )
 
         return PerceptionSnapshot(
-            detections=[],
-            sounds=sounds,
-            source="mic",
-            timestamp=time.time(),
+            detections=[], sounds=[], source="mic", timestamp=time.time(),
         )
