@@ -114,7 +114,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         camera: PerceptionSource = YOLOCamera(
             device=settings.camera_device,
             model_path=settings.model_path,
-            confidence=0.5,
+            confidence=0.65,
             inference_interval=0.5,
         )
         logger.info("Using YOLO camera on %s", settings.camera_device)

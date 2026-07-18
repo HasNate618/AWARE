@@ -8,7 +8,7 @@ from aware.app.llm.interface import RuleSpec
 logger = logging.getLogger(__name__)
 
 _CREATE_RULE_RE = re.compile(
-    r"when\s+(.+?)(?:,\s*|\s+then\s+)(.+?)(?:\s+priority\s+(\w+))?$",
+    r"when\s+(.+?)(?:,\s*|\s+then\s+|\s+)(say|play|alert|notify|log|send|show|light|turn|ring|sound|speak|activate|enable|disable|start|stop|trigger)\s+(.+?)(?:\s+priority\s+(\w+))?$",
     re.IGNORECASE,
 )
 
@@ -20,11 +20,11 @@ class StubLLM:
         text = user_input.strip().rstrip(".")
         match = _CREATE_RULE_RE.search(text)
         if match:
-            when, then, priority = match.groups()
+            when, _verb, then, priority = match.groups()
             return RuleSpec(
                 name=_slugify(when),
                 when=when.strip(),
-                then=then.strip(),
+                then=f"{_verb} {then.strip()}",
                 priority=priority or "normal",
             )
         return RuleSpec(

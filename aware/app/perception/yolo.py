@@ -38,13 +38,18 @@ _LABEL_MAP: dict[str, str] = {
     "truck": "car",
     "bus": "car",
     "motorcycle": "car",
-    "bicycle": "car",
+    "bicycle": "bicycle",
     "backpack": "package",
     "handbag": "package",
     "suitcase": "package",
     "cell phone": "phone",
     "laptop": "laptop",
+    "keyboard": "keyboard",
     "tv": "tv",
+    "bottle": "bottle",
+    "cup": "cup",
+    "book": "book",
+    "chair": "chair",
 }
 
 
