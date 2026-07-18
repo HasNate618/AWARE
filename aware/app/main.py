@@ -325,6 +325,15 @@ async def list_rules() -> list[dict[str, object]]:
     return await store.get_active()
 
 
+@app.delete("/rules/{name}")
+async def delete_rule(name: str) -> dict[str, str]:
+    """Deactivate a rule by name."""
+    store: RulesStore = app.state.store
+    await store.deactivate(name)
+    logger.info("Rule deactivated: %s", name)
+    return {"status": "deleted", "name": name}
+
+
 class CommandRequest(BaseModel):
     command: str
 

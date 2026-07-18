@@ -2,154 +2,211 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AWARE Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+    <title>A.W.A.R.E. — Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'SF Mono', 'Fira Code', monospace; background: #0a0a0a; color: #e0e0e0; overflow-x: hidden; width: 100%; }
-        .header { background: #111; border-bottom: 1px solid #333; padding: 12px 20px; display: flex; align-items: center; gap: 16px; }
-        .header h1 { font-size: 18px; color: #00ff88; font-weight: 600; }
+        .header { background: #111; border-bottom: 1px solid #333; padding: 10px 16px; display: flex; align-items: center; gap: 10px; width: 100%; }
+        .header h1 { font-size: 16px; color: #00ff88; font-weight: 700; white-space: nowrap; }
+        .header .sub { font-size: 10px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #00ff88; animation: pulse 2s infinite; flex-shrink: 0; }
         .status-dot.offline { background: #ff4444; animation: none; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; width: 100%; }
-        @media (max-width: 700px) { .grid { grid-template-columns: 1fr; padding: 8px; gap: 8px; } }
-        .card { background: #111; border: 1px solid #333; border-radius: 8px; padding: 16px; }
-        .card h2 { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
-        .empty { color: #555; font-style: italic; font-size: 13px; }
+        .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+        .header-right a { color: #555; text-decoration: none; font-size: 12px; cursor: pointer; }
+        .header-right a:hover { color: #ff4444; }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; max-width: 1400px; margin: 0 auto; width: 100%; }
+        @media (max-width: 700px) { .grid { grid-template-columns: 1fr; padding: 6px; gap: 6px; } }
+        .card { background: #111; border: 1px solid #333; border-radius: 8px; padding: 14px; }
+        .card h2 { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+        .empty { color: #555; font-style: italic; font-size: 12px; }
         .full { grid-column: 1 / -1; }
         @media (max-width: 700px) { .full { grid-column: 1; } }
 
         .video-wrap { position: relative; background: #000; border-radius: 4px; overflow: hidden; aspect-ratio: 4/3; max-width: 100%; }
         .video-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; max-width: 100%; }
-        .video-badge { position: absolute; top: 8px; left: 8px; background: #00ff8822; color: #00ff88; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+        .video-badge { position: absolute; top: 6px; left: 6px; background: #00ff8822; color: #00ff88; padding: 2px 8px; border-radius: 4px; font-size: 10px; }
         .video-badge.offline { background: #ff444422; color: #ff4444; }
 
-        .log-list { list-style: none; max-height: 250px; overflow-y: auto; font-size: 12px; }
-        .log-item { display: flex; gap: 12px; padding: 4px 0; border-bottom: 1px solid #1a1a1a; align-items: center; }
-        .log-time { color: #555; flex-shrink: 0; width: 80px; }
-        .log-label { font-weight: 600; flex-shrink: 0; width: 100px; }
+        .log-list { list-style: none; max-height: 220px; overflow-y: auto; font-size: 12px; }
+        .log-item { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid #1a1a1a; align-items: center; }
+        .log-time { color: #555; flex-shrink: 0; width: 70px; font-size: 11px; }
+        .log-label { font-weight: 600; flex-shrink: 0; width: 90px; font-size: 12px; }
         .log-label.object { color: #00ff88; }
         .log-label.sound { color: #ffaa00; }
-        .log-conf { color: #888; flex-shrink: 0; width: 45px; text-align: right; }
-        .log-bar { flex: 1; min-width: 40px; height: 4px; background: #1a1a1a; border-radius: 2px; }
+        .log-conf { color: #888; flex-shrink: 0; width: 40px; text-align: right; font-size: 11px; }
+        .log-bar { flex: 1; min-width: 30px; height: 4px; background: #1a1a1a; border-radius: 2px; }
         .log-fill { height: 100%; border-radius: 2px; }
         .log-fill.object { background: #00ff88; }
         .log-fill.sound { background: #ffaa00; }
 
-        .command-form { display: flex; gap: 8px; margin-top: 12px; }
-        .command-input { flex: 1; background: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 8px 12px; color: #e0e0e0; font-family: inherit; font-size: 13px; }
+        .command-form { display: flex; gap: 8px; }
+        .command-input { flex: 1; background: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 8px 12px; color: #e0e0e0; font-family: inherit; font-size: 12px; min-width: 0; }
         .command-input:focus { outline: none; border-color: #00ff88; }
-        .command-btn { background: #00ff88; color: #0a0a0a; border: none; border-radius: 4px; padding: 8px 16px; font-family: inherit; font-weight: 600; cursor: pointer; }
+        .command-btn { background: #00ff88; color: #0a0a0a; border: none; border-radius: 4px; padding: 8px 14px; font-family: inherit; font-weight: 600; cursor: pointer; font-size: 12px; white-space: nowrap; }
         .command-btn:hover { background: #00cc6a; }
-        .command-feedback { margin-top: 8px; font-size: 12px; color: #00ff88; }
+        .command-feedback { margin-top: 6px; font-size: 11px; color: #00ff88; word-break: break-word; }
 
-        .chart-wrap { height: 200px; position: relative; }
+        .chart-wrap { height: 180px; position: relative; }
 
-        .activity-list { list-style: none; max-height: 300px; overflow-y: auto; }
-        .activity-item { padding: 6px 0; border-bottom: 1px solid #1a1a1a; font-size: 12px; display: flex; gap: 8px; align-items: baseline; }
-        .activity-time { color: #555; flex-shrink: 0; width: 80px; }
-        .activity-tag { padding: 1px 6px; border-radius: 3px; font-size: 11px; flex-shrink: 0; }
+        /* Workflow cards */
+        .workflow-list { list-style: none; }
+        .workflow-item { padding: 8px 0; border-bottom: 1px solid #222; display: flex; align-items: flex-start; gap: 8px; }
+        .workflow-body { flex: 1; min-width: 0; }
+        .workflow-name { color: #00ff88; font-weight: 600; font-size: 13px; word-break: break-word; }
+        .workflow-desc { color: #888; font-size: 11px; word-break: break-word; }
+        .workflow-del { background: none; border: 1px solid #ff444455; color: #ff4444; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 11px; font-family: inherit; flex-shrink: 0; }
+        .workflow-del:hover { background: #ff444422; }
+
+        .activity-list { list-style: none; max-height: 280px; overflow-y: auto; }
+        .activity-item { padding: 5px 0; border-bottom: 1px solid #1a1a1a; font-size: 11px; display: flex; gap: 6px; align-items: baseline; }
+        .activity-time { color: #555; flex-shrink: 0; width: 70px; font-size: 11px; }
+        .activity-tag { padding: 1px 5px; border-radius: 3px; font-size: 10px; flex-shrink: 0; }
         .activity-tag.action { background: #ff880022; color: #ffaa00; }
         .activity-tag.rule { background: #00ff8822; color: #00ff88; }
-        .activity-msg { color: #ccc; }
+        .activity-msg { color: #ccc; word-break: break-word; }
+
+        /* Login screen */
+        .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .login-box { background: #111; border: 1px solid #333; border-radius: 12px; padding: 40px; max-width: 380px; width: 100%; text-align: center; }
+        .login-box h1 { color: #00ff88; font-size: 28px; margin-bottom: 4px; }
+        .login-box .tagline { color: #555; font-size: 12px; margin-bottom: 30px; }
+        .login-box input { width: 100%; background: #0a0a0a; border: 1px solid #333; border-radius: 6px; padding: 10px 14px; color: #e0e0e0; font-family: inherit; font-size: 14px; margin-bottom: 16px; }
+        .login-box input:focus { outline: none; border-color: #00ff88; }
+        .login-box .login-btn { width: 100%; background: #00ff88; color: #0a0a0a; border: none; border-radius: 6px; padding: 10px; font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer; }
+        .login-box .login-btn:hover { background: #00cc6a; }
+        .login-box .hint { color: #555; font-size: 11px; margin-top: 12px; }
 
         @media (max-width: 700px) {
-            .log-item { flex-wrap: wrap; gap: 4px; }
-            .log-time { width: 60px; font-size: 11px; }
-            .log-label { width: 80px; font-size: 11px; }
-            .header h1 { font-size: 15px; }
+            .header { padding: 8px 10px; gap: 6px; }
+            .header h1 { font-size: 14px; }
+            .header .sub { font-size: 9px; }
+            .log-item { flex-wrap: wrap; gap: 3px; }
+            .log-time { width: 55px; font-size: 10px; }
+            .log-label { width: 70px; font-size: 11px; }
+            .header-right a { font-size: 11px; }
             .card { padding: 10px; }
-            .grid { gap: 10px; padding: 10px; }
+            .card h2 { font-size: 11px; }
+            .grid { gap: 6px; padding: 6px; }
             .video-wrap { aspect-ratio: 16/9; }
-            .activity-item { flex-wrap: wrap; word-break: break-word; }
+            .activity-item { flex-wrap: wrap; }
+            .activity-time { width: 55px; font-size: 10px; }
+            .login-box { padding: 24px; }
+            .login-box h1 { font-size: 22px; }
+            .workflow-item { flex-wrap: wrap; }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="status-dot" id="statusDot"></div>
-        <h1>AWARE</h1>
-        <span id="statusText" style="color: #888; font-size: 12px;">connecting...</span>
-    </div>
+<div id="app"></div>
 
-    <div class="grid">
-        <!-- Command -->
-        <div class="card full">
-            <h2>Command</h2>
-            <div class="command-form">
-                <input type="text" class="command-input" id="commandInput"
-                       placeholder='e.g. "when person detected, say hello"'>
-                <button class="command-btn" id="commandBtn">Teach</button>
+<script>
+    const API = window.location.origin;
+
+    function showLogin() {
+        document.getElementById('app').innerHTML = `
+            <div class="login-wrap">
+                <div class="login-box">
+                    <h1>A.W.A.R.E.</h1>
+                    <div class="tagline">Autonomous Witness &amp; Response Engine</div>
+                    <input type="password" id="loginPass" placeholder="password" autofocus>
+                    <button class="login-btn" id="loginBtn">Login</button>
+                    <div class="hint">press Login — no password needed</div>
+                </div>
+            </div>`;
+        document.getElementById('loginBtn').onclick = () => {
+            localStorage.setItem('aware_logged_in', '1');
+            showDashboard();
+        };
+        document.getElementById('loginPass').onkeydown = (e) => {
+            if (e.key === 'Enter') document.getElementById('loginBtn').click();
+        };
+        document.getElementById('loginPass').focus();
+    }
+
+    function showDashboard() {
+        document.getElementById('app').innerHTML = `
+            <div class="header">
+                <div class="status-dot" id="statusDot"></div>
+                <h1>A.W.A.R.E.</h1>
+                <span class="sub">Autonomous Witness &amp; Response Engine</span>
+                <div class="header-right">
+                    <span id="statusText" style="color:#888;font-size:12px;">connecting...</span>
+                    <a id="logoutLink">logout</a>
+                </div>
             </div>
-            <div class="command-feedback" id="commandFeedback"></div>
-        </div>
+            <div class="grid">
+                <div class="card full">
+                    <h2>Command</h2>
+                    <div class="command-form">
+                        <input type="text" class="command-input" id="commandInput" placeholder='e.g. "when person detected, say hello"'>
+                        <button class="command-btn" id="commandBtn">Teach</button>
+                    </div>
+                    <div class="command-feedback" id="commandFeedback"></div>
+                </div>
+                <div class="card full">
+                    <h2>Camera</h2>
+                    <div class="video-wrap">
+                        <img id="videoFeed" src="${API}/api/video" alt="Camera feed">
+                        <div class="video-badge" id="cameraBadge">connecting...</div>
+                    </div>
+                </div>
+                <div class="card full">
+                    <h2>Workflows</h2>
+                    <ul class="workflow-list" id="workflowList"><li class="empty">no active workflows</li></ul>
+                </div>
+                <div class="card full">
+                    <h2>Object Log</h2>
+                    <ul class="log-list" id="objectLog"><li class="empty">waiting for detections...</li></ul>
+                </div>
+                <div class="card full">
+                    <h2>Sound Log</h2>
+                    <ul class="log-list" id="soundLog"><li class="empty">waiting for sounds...</li></ul>
+                </div>
+                <div class="card">
+                    <h2>Temperature</h2>
+                    <div class="chart-wrap"><canvas id="tempChart"></canvas></div>
+                </div>
+                <div class="card">
+                    <h2>Distance</h2>
+                    <div class="chart-wrap"><canvas id="distChart"></canvas></div>
+                </div>
+                <div class="card full">
+                    <h2>Activity</h2>
+                    <ul class="activity-list" id="activityList"><li class="empty">no activity yet</li></ul>
+                </div>
+            </div>`;
+        initDashboard();
+    }
 
-        <!-- Camera -->
-        <div class="card full">
-            <h2>Camera</h2>
-            <div class="video-wrap">
-                <img id="videoFeed" src="/api/video" alt="Camera feed">
-                <div class="video-badge" id="cameraBadge">connecting...</div>
-            </div>
-        </div>
+    if (localStorage.getItem('aware_logged_in')) {
+        showDashboard();
+    } else {
+        showLogin();
+    }
 
-        <!-- Object log -->
-        <div class="card full">
-            <h2>Object Log</h2>
-            <ul class="log-list" id="objectLog">
-                <li class="empty">waiting for detections...</li>
-            </ul>
-        </div>
-
-        <!-- Sound log -->
-        <div class="card full">
-            <h2>Sound Log</h2>
-            <ul class="log-list" id="soundLog">
-                <li class="empty">waiting for sounds...</li>
-            </ul>
-        </div>
-
-        <!-- Temperature chart -->
-        <div class="card">
-            <h2>Temperature</h2>
-            <div class="chart-wrap">
-                <canvas id="tempChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Distance chart -->
-        <div class="card">
-            <h2>Distance</h2>
-            <div class="chart-wrap">
-                <canvas id="distChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Activity log -->
-        <div class="card full">
-            <h2>Activity</h2>
-            <ul class="activity-list" id="activityList">
-                <li class="empty">no activity yet</li>
-            </ul>
-        </div>
-    </div>
-
-    <script>
+    // ---------- Dashboard ----------
+    function initDashboard() {
         const API = window.location.origin;
 
+        document.getElementById('logoutLink').onclick = () => {
+            localStorage.removeItem('aware_logged_in');
+            showLogin();
+        };
+
         async function fetchJSON(path) {
-            try {
-                const r = await fetch(API + path);
-                if (!r.ok) throw new Error(r.status);
-                return await r.json();
-            } catch (e) { return null; }
+            try { const r = await fetch(API + path); if (!r.ok) return null; return await r.json(); }
+            catch (e) { return null; }
         }
 
         function setConnected(ok) {
-            document.getElementById('statusDot').className = 'status-dot' + (ok ? '' : ' offline');
-            document.getElementById('statusText').textContent = ok ? 'connected' : 'disconnected';
+            const dot = document.getElementById('statusDot');
+            if (dot) { dot.className = 'status-dot' + (ok ? '' : ' offline'); }
+            const txt = document.getElementById('statusText');
+            if (txt) { txt.textContent = ok ? 'connected' : 'disconnected'; }
         }
 
         function timeStr(ts) { return ts ? new Date(ts * 1000).toLocaleTimeString() : '--'; }
@@ -161,25 +218,55 @@
             if (!data) { setConnected(false); return; }
             setConnected(true);
             const badge = document.getElementById('cameraBadge');
+            if (!badge) return;
             badge.textContent = data.source;
             badge.className = 'video-badge' + (data.source.includes('unavailable') || data.source === 'mock_camera' ? ' offline' : '');
+        }
+
+        // Workflows
+        async function updateWorkflows() {
+            const data = await fetchJSON('/rules');
+            const list = document.getElementById('workflowList');
+            if (!list) return;
+            if (!data || !data.length) { list.innerHTML = '<li class="empty">no active workflows</li>'; return; }
+            list.innerHTML = data.map(r =>
+                '<li class="workflow-item">' +
+                    '<div class="workflow-body">' +
+                        '<div class="workflow-name">' + r.name + '</div>' +
+                        '<div class="workflow-desc">when ' + r.when_text + ' → ' + r.then_text + '</div>' +
+                    '</div>' +
+                    '<button class="workflow-del" data-name="' + r.name + '">delete</button>' +
+                '</li>'
+            ).join('');
+            list.querySelectorAll('.workflow-del').forEach(btn => {
+                btn.onclick = async () => {
+                    const name = btn.dataset.name;
+                    await fetch(API + '/rules/' + encodeURIComponent(name), { method: 'DELETE' });
+                    updateWorkflows();
+                    updateActivity();
+                };
+            });
         }
 
         // Object log
         async function updateObjectLog() {
             const data = await fetchJSON('/api/objects?limit=50');
-            if (!data || !data.length) return;
-            document.getElementById('objectLog').innerHTML = data.reverse().map(d =>
-                `<li class="log-item"><span class="log-time">${timeStr(d.timestamp)}</span><span class="log-label object">${d.label}</span><span class="log-conf">${pct(d.confidence)}%</span><span class="log-bar"><span class="log-fill object" style="width:${pct(d.confidence)}%"></span></span></li>`
+            const list = document.getElementById('objectLog');
+            if (!list) return;
+            if (!data || !data.length) { list.innerHTML = '<li class="empty">waiting for detections...</li>'; return; }
+            list.innerHTML = data.reverse().map(d =>
+                '<li class="log-item"><span class="log-time">' + timeStr(d.timestamp) + '</span><span class="log-label object">' + d.label + '</span><span class="log-conf">' + pct(d.confidence) + '%</span><span class="log-bar"><span class="log-fill object" style="width:' + pct(d.confidence) + '%"></span></span></li>'
             ).join('');
         }
 
         // Sound log
         async function updateSoundLog() {
             const data = await fetchJSON('/api/sounds?limit=50');
-            if (!data || !data.length) return;
-            document.getElementById('soundLog').innerHTML = data.reverse().map(d =>
-                `<li class="log-item"><span class="log-time">${timeStr(d.timestamp)}</span><span class="log-label sound">${d.label}</span><span class="log-conf">${pct(d.confidence)}%</span><span class="log-bar"><span class="log-fill sound" style="width:${pct(d.confidence)}%"></span></span></li>`
+            const list = document.getElementById('soundLog');
+            if (!list) return;
+            if (!data || !data.length) { list.innerHTML = '<li class="empty">waiting for sounds...</li>'; return; }
+            list.innerHTML = data.reverse().map(d =>
+                '<li class="log-item"><span class="log-time">' + timeStr(d.timestamp) + '</span><span class="log-label sound">' + d.label + '</span><span class="log-conf">' + pct(d.confidence) + '%</span><span class="log-bar"><span class="log-fill sound" style="width:' + pct(d.confidence) + '%"></span></span></li>'
             ).join('');
         }
 
@@ -202,39 +289,33 @@
                     const resp = await r.json();
                     input.value = '';
                     fb.textContent = '✓ Rule "' + resp.rule_name + '" created';
+                    updateWorkflows();
                     updateActivity();
-                } else {
-                    fb.textContent = '✗ Failed';
-                }
+                } else { fb.textContent = '✗ Failed'; }
             } catch (e) { fb.textContent = '✗ Error'; }
             btn.textContent = 'Teach';
             btn.disabled = false;
             setTimeout(() => fb.textContent = '', 3000);
         }
 
-        document.getElementById('commandBtn').addEventListener('click', createRule);
-        document.getElementById('commandInput').addEventListener('keydown', e => { if (e.key === 'Enter') createRule(); });
+        const cmdBtn = document.getElementById('commandBtn');
+        const cmdInput = document.getElementById('commandInput');
+        if (cmdBtn) cmdBtn.onclick = createRule;
+        if (cmdInput) cmdInput.onkeydown = (e) => { if (e.key === 'Enter') createRule(); };
 
-        document.getElementById('videoFeed').addEventListener('error', function() { this.src = '/api/video?' + Date.now(); });
+        const videoFeed = document.getElementById('videoFeed');
+        if (videoFeed) videoFeed.onerror = function() { this.src = API + '/api/video?' + Date.now(); };
 
-        // --- Charts ---
-        function makeChart(canvasId, label, color) {
-            const ctx = document.getElementById(canvasId).getContext('2d');
+        // Charts
+        function makeChart(id, label, color) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            const ctx = el.getContext('2d');
             return new Chart(ctx, {
                 type: 'line',
-                data: { labels: [], datasets: [{
-                    label: label,
-                    data: [],
-                    borderColor: color,
-                    backgroundColor: color + '22',
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 0,
-                }]},
+                data: { labels: [], datasets: [{ label, data: [], borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.3, pointRadius: 0 }] },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: { duration: 0 },
+                    responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
                     scales: {
                         x: { ticks: { color: '#555', maxTicksLimit: 8, font: { size: 9 } }, grid: { color: '#1a1a1a' } },
                         y: { ticks: { color: '#555', font: { size: 9 } }, grid: { color: '#1a1a1a' } },
@@ -248,30 +329,31 @@
         const distChart = makeChart('distChart', 'cm', '#0088ff');
 
         async function updateChart(chart, topic) {
+            if (!chart) return;
             const data = await fetchJSON('/api/timeseries?topic=' + topic + '&window=3600&bucket=30');
             if (!data || !data.length) return;
-            const labels = data.map(d => new Date(d.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-            chart.data.labels = labels;
+            chart.data.labels = data.map(d => new Date(d.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
             chart.data.datasets[0].data = data.map(d => d.avg);
             chart.update();
         }
 
-        // Activity log
+        // Activity
         async function updateActivity() {
             const data = await fetchJSON('/events?limit=30');
-            if (!data) return;
             const list = document.getElementById('activityList');
-            if (!data.length) { list.innerHTML = '<li class="empty">no activity yet</li>'; return; }
+            if (!list) return;
+            if (!data || !data.length) { list.innerHTML = '<li class="empty">no activity yet</li>'; return; }
             list.innerHTML = data.reverse().map(e => {
                 const d = e.data || {};
                 const cls = e.topic === 'action_executed' ? 'action' : 'rule';
-                const msg = d.message || d.name || JSON.stringify(d);
-                return `<li class="activity-item"><span class="activity-time">${timeStr(e.timestamp)}</span><span class="activity-tag ${cls}">${e.topic.replace('_', ' ')}</span><span class="activity-msg">${msg}</span></li>`;
+                const msg = d.message || d.name || JSON.stringify(d).substring(0, 80);
+                return '<li class="activity-item"><span class="activity-time">' + timeStr(e.timestamp) + '</span><span class="activity-tag ' + cls + '">' + e.topic.replace('_', ' ') + '</span><span class="activity-msg">' + msg + '</span></li>';
             }).join('');
         }
 
         // Poll loops
-        setInterval(updateBadge, 1000);
+        setInterval(updateBadge, 2000);
+        setInterval(updateWorkflows, 3000);
         setInterval(updateObjectLog, 1000);
         setInterval(updateSoundLog, 1000);
         setInterval(() => updateChart(tempChart, 'sensor:temperature_c'), 5000);
@@ -279,11 +361,13 @@
         setInterval(updateActivity, 2000);
 
         updateBadge();
+        updateWorkflows();
         updateObjectLog();
         updateSoundLog();
         updateChart(tempChart, 'sensor:temperature_c');
         updateChart(distChart, 'sensor:distance_cm');
         updateActivity();
-    </script>
+    }
+</script>
 </body>
 </html>
