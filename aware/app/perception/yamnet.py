@@ -118,7 +118,7 @@ class YAMNetMic:
         device: int | str | None = None,
         sample_rate: int = 0,  # 0 = auto-detect native rate
         chunk_duration: float = 0.975,
-        energy_threshold: float = 0.005,
+        energy_threshold: float = 0.002,
         detection_interval: float = 0.25,
     ) -> None:
         self.device = device
