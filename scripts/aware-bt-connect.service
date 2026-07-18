@@ -1,0 +1,14 @@
+[Unit]
+Description=AWARE Bluetooth speaker auto-connect
+After=bluetooth.target bluealsa.service
+Before=aware.service
+Wants=bluetooth.target bluealsa.service
+
+[Service]
+Type=oneshot
+User=arduino
+ExecStart=/home/arduino/aware/scripts/connect-bt.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
