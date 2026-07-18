@@ -230,19 +230,22 @@ This section captures where the project was left off. OpenCode should read this 
 
 ### STM32U585 / Modulino communication
 - **arduino-router** (`/usr/bin/arduino-router`) bridges QRB2210 ↔ STM32U585 over `/dev/ttyHS1` at 115200 baud.
-- Exposes msgpack-rpc on Unix socket `/var/run/arduino-router.sock` and TCP port 7500.
+- Exposes msgpack-rpc on Unix socket `/var/run/arduino-router.sock`. Also listens on TCP port 7500.
 - **Router protocol**: msgpack-rpc with 4-byte big-endian length prefix framing.
   - Request: `[0, msgid, "method", [params]]`
   - Response: `[1, msgid, error/None, result]`
-  - Methods: `mon/connected`, `mon/write(data)`, `mon/read(max_bytes)`, `$/serial/open`, `$/serial/close`
-  - Serial already opened at startup (router logs confirm). `mon/connected` returns `True`.
-  - `mon/write` sends bytes to STM32, `mon/read` reads from STM32 serial buffer.
+  - Notification: `[2, "method", [params]]`
+  - Internal methods: `$/register`, `$/serial/open`, `$/serial/close`, `$/setMaxMsgSize`, `mon/connected`, `mon/write`, `mon/read`, `mon/reset`, `hci/avail`, `hci/close`
+  - Official repo: https://github.com/arduino/arduino-router
+- **SerialMCU** (`aware/app/mcu/serial_mcu.py`) connects to the router as a msgpack-rpc client.
+  - Calls RPC methods on the STM32: `read_all`, `read_sensor`, `set_led`, `play_tone`, `set_relay`
+  - If the method isn't registered by the STM32, the router returns an error, and `SerialMCU` falls back to internal mock data.
 - **STM32 firmware** runs Zephyr RTOS with Arduino RPCLite. Firmware binary: `~/.arduino15/packages/arduino/hardware/zephyr/0.51.0/firmwares/zephyr-arduino_uno_q_stm32u585xx.elf`
 - **Arduino_RPCLite library** (`~/.arduino15/.../libraries/Arduino_RPCLite/`) provides msgpack RPC over serial.
-  - Client: `SerialClient(port, baudrate)` with `.call(method, *args)` and `.notify(method, *args)`.
-  - Wire format: raw msgpack `[0, msgid, "method", [args]]` (no length prefix on direct serial).
-- **Current status**: The STM32 runs the Zephyr bootloader firmware. No Modulino-reading sketch has been uploaded yet. The custom text protocol (`READ_ALL`, `LED:...`, etc.) in `serial_mcu.py` is our own design and requires STM32 firmware that implements these commands.
-- **To make Modulinos work**: Write an Arduino sketch (using RPCLite library) that registers RPC methods (e.g., `read_temp`, `read_distance`, `set_led`), compile and upload it to the STM32. Then update `serial_mcu.py` to send RPCLite msgpack calls through the router's `mon/write`/`mon/read` instead of direct serial.
+  - Wire format: raw msgpack `[0, msgid, "method", [args]]` (NO length prefix on direct serial, but the router adds 4-byte BE framing).
+  - `SerialServer` registers callbacks for methods and responds to RPC calls.
+- **Current status**: The STM32 runs the Zephyr bootloader firmware — it does NOT register any RPC methods yet. The MockSensorBus is no longer used; SerialMCU's internal mock provides data automatically.
+- **To make real Modulinos work**: Write an Arduino sketch that uses `Arduino_RPCLite` `SerialServer` to register methods like `read_temp`, `read_distance`, `set_led`. Compile with `arduino-cli compile -b arduino:zephyr:unoq` and upload. Once running, SerialMCU's RPC calls will hit the real STM32 and return real sensor data.
 
 ### What to do next
 1. Telegram notification action
