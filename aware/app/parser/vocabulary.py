@@ -20,10 +20,12 @@ OBJECTS: Final[dict[str, str]] = {
 
 SOUNDS: Final[dict[str, str]] = {
     "doorbell": "doorbell",
+    "door bell": "doorbell",
     "knock": "knock",
     "knocking": "knock",
     "glass break": "glass_break",
     "glass breaks": "glass_break",
+    "glass breaking": "glass_break",
     "breaking glass": "glass_break",
     "voice": "voice",
     "speech": "voice",

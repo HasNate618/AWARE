@@ -12,6 +12,7 @@ from aware.app.config import get_settings, setup_logging
 from aware.app.core.event_bus import EventBus
 from aware.app.core.loop import RulesLoop
 from aware.app.llm.interface import RuleSpec
+from aware.app.llm.llama import LlamaLLM
 from aware.app.llm.stub import StubLLM
 from aware.app.memory.db import EventDB
 from aware.app.parser.nl_parser import parse_rule
@@ -61,10 +62,17 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     bus = EventBus()
     db = EventDB(settings.db_path)
     store = RulesStore(settings.db_path)
-    llm = StubLLM()
     camera = MockCamera()
     engine = RulesEngine(store, bus, db)
     loop = RulesLoop(engine, bus, settings.rules_tick_ms)
+
+    # Choose LLM: stub (instant, deterministic) or real (llama.cpp server)
+    if settings.llm_server_url:
+        llm: StubLLM | LlamaLLM = LlamaLLM(base_url=settings.llm_server_url)
+        logger.info("Using real LLM at %s", settings.llm_server_url)
+    else:
+        llm = StubLLM()
+        logger.info("Using stub LLM (no server configured)")
 
     await db.open()
     await store.open()

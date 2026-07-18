@@ -32,14 +32,17 @@ class ParsedRule:
 def parse_when(text: str) -> list[Trigger]:
     triggers: list[Trigger] = []
     lower = text.lower()
+    # Split on " and " / " & " for compound conditions
+    parts = [p.strip() for p in lower.replace(" & ", " and ").split(" and ")]
+    search_text = " ".join(parts)
     for keyword, label in vocab.SOUNDS.items():
-        if keyword in lower:
+        if keyword in search_text:
             triggers.append(Trigger(type="sound", value=label))
     for keyword, label in vocab.OBJECTS.items():
-        if keyword in lower:
+        if keyword in search_text:
             triggers.append(Trigger(type="detection", value=label))
     for keyword, (start, end) in vocab.TIMES.items():
-        if keyword in lower:
+        if keyword in search_text:
             triggers.append(Trigger(type="time", value=keyword, time_range=(start, end)))
     match = vocab.TIME_RE.search(text)
     if match:
