@@ -225,6 +225,9 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     except Exception:
         pass
 
+    if isinstance(sensor_bus, MockSensorBus):
+        logger.warning("MCU serial %s unavailable — using mock", settings.mcu_serial_port)
+
     loop_task = asyncio.create_task(loop.start())
     camera_task = asyncio.create_task(perception_loop(bus, camera, mic))
     sensor_task = asyncio.create_task(sensor_loop(sensor_bus, bus, db))
