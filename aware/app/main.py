@@ -35,22 +35,16 @@ MOCK_SNAPSHOT_INTERVAL = 0.5  # seconds
 
 
 def perception_logger_factory(db: EventDB) -> Any:
-    """Create a handler that logs each detection/sound to the DB for timeseries."""
+    """Create a handler that logs snapshot summaries to the DB."""
 
     async def handle_perception(event: dict[str, Any]) -> None:
         snapshot: PerceptionSnapshot | None = event.get("snapshot")
         if not snapshot:
             return
-        for det in snapshot.detections:
-            await db.log("detection", {
-                "label": det.label,
-                "value": det.confidence,
-                "source": snapshot.source,
-            })
-        for snd in snapshot.sounds:
-            await db.log("sound", {
-                "label": snd.label,
-                "value": snd.confidence,
+        if snapshot.detections or snapshot.sounds:
+            await db.log("perception", {
+                "detections": [(d.label, d.confidence) for d in snapshot.detections],
+                "sounds": [(s.label, s.confidence) for s in snapshot.sounds],
                 "source": snapshot.source,
             })
 
