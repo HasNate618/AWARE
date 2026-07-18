@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 from collections import deque
+from typing import Any
 
 import numpy as np
 
@@ -91,8 +92,8 @@ class YOLOCamera:
         self.inference_interval = inference_interval
         self.resolution = resolution
         self._running = False
-        self._cap: object | None = None
-        self._session: object | None = None
+        self._cap: Any = None
+        self._session: Any = None
         self._last_frame: np.ndarray | None = None
         self._last_snapshot: PerceptionSnapshot = PerceptionSnapshot(
             detections=[], sounds=[], source="yolo_unavailable", timestamp=time.time()
@@ -140,12 +141,7 @@ class YOLOCamera:
     async def stop(self) -> None:
         self._running = False
         if self._cap is not None:
-            try:
-                import cv2
-
-                self._cap.release()
-            except Exception:
-                pass
+            self._cap.release()
             self._cap = None
         logger.info("YOLO camera stopped")
 
@@ -170,8 +166,13 @@ class YOLOCamera:
                 # Label
                 label = f"{det.label} {det.confidence:.0%}"
                 (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(frame, (x1, y1 - th - 8), (x1 + tw + 4, y1), (0, 255, 136), -1)
-                cv2.putText(frame, label, (x1 + 2, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                cv2.rectangle(
+                    frame, (x1, y1 - th - 8), (x1 + tw + 4, y1), (0, 255, 136), -1
+                )
+                cv2.putText(
+                    frame, label, (x1 + 2, y1 - 4),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1,
+                )
 
             # Encode to JPEG
             _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])

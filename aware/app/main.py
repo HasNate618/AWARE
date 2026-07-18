@@ -5,6 +5,7 @@ import logging
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
@@ -20,7 +21,7 @@ from aware.app.llm.llama import LlamaLLM
 from aware.app.llm.stub import StubLLM
 from aware.app.memory.db import EventDB
 from aware.app.parser.nl_parser import parse_rule
-from aware.app.perception.interface import PerceptionSource
+from aware.app.perception.interface import PerceptionSnapshot, PerceptionSource
 from aware.app.perception.mock_camera import MockCamera
 from aware.app.perception.yolo import YOLOCamera
 from aware.app.perception.yamnet import YAMNetMic
@@ -241,7 +242,7 @@ async def get_detections(limit: int = 50) -> list[dict[str, object]]:
     if isinstance(mic, YAMNetMic):
         results.extend(mic.get_sound_log(limit))
     # Sort by timestamp, most recent first
-    results.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+    results.sort(key=lambda x: float(str(x.get("timestamp", 0))), reverse=True)
     return results[:limit]
 
 

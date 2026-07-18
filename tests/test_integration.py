@@ -207,7 +207,8 @@ async def test_full_flow_e2e() -> None:
 
 async def test_and_conditions_across_types(
     bus: EventBus, store: RulesStore, db: EventDB
-) -> """AND across trigger types: detection + time must BOTH match.""":
+) -> None:
+    """AND across trigger types: detection + time must BOTH match."""
     # Rule: when person detected AND after 10pm, sound alarm
     await store.add(
         name="night_intruder",
@@ -261,7 +262,8 @@ async def test_and_conditions_across_types(
 
 async def test_and_conditions_both_must_match(
     bus: EventBus, store: RulesStore, db: EventDB
-) -> """Verify AND: both detection AND sound must be present.""":
+) -> None:
+    """Verify AND: both detection AND sound must be present."""
     # Rule: when person detected AND doorbell rings, say welcome
     await store.add(
         name="greet_with_doorbell",

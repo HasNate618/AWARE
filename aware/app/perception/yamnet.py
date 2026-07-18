@@ -5,6 +5,7 @@ import logging
 import math
 import time
 from collections import deque
+from typing import Any
 
 import numpy as np
 
@@ -130,7 +131,7 @@ class YAMNetMic:
             detections=[], sounds=[], source="mic_unavailable", timestamp=time.time()
         )
         self._sound_log: deque[dict[str, object]] = deque(maxlen=200)
-        self._stream: object | None = None
+        self._stream: Any = None
         self._audio_queue: deque[np.ndarray] = deque(maxlen=10)
 
     async def start(self) -> None:
@@ -157,7 +158,7 @@ class YAMNetMic:
                     logger.warning("No USB mic found, using default device 0")
 
             # Start audio stream in a thread
-            def audio_callback(indata, frames, time_info, status):
+            def audio_callback(indata: Any, frames: Any, time_info: Any, status: Any) -> None:
                 if status:
                     logger.warning("Audio status: %s", status)
                 self._audio_queue.append(indata[:, 0].copy())

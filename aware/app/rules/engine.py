@@ -7,7 +7,7 @@ from typing import Any
 
 from aware.app.core.event_bus import EventBus
 from aware.app.memory.db import EventDB
-from aware.app.perception.interface import PerceptionSnapshot
+from aware.app.perception.interface import Detection, PerceptionSnapshot
 from aware.app.rules.store import RulesStore
 
 logger = logging.getLogger(__name__)
@@ -108,9 +108,11 @@ class RulesEngine:
                      name, detection.label, detection.confidence * 100, len(actions))
         for action in actions:
             action_type = action.get("type", "log")
-            action_params = action.get("params", {})
+            action_params: dict[str, object] = action.get("params", {})  # type: ignore[assignment]
             speak_text = action_params.get("text", "")
-            msg = f"Rule '{name}' triggered by {detection.label} ({detection.confidence:.0%}). Action: {action_type}"
+            det_label = detection.label
+            det_conf = detection.confidence
+            msg = f"Rule '{name}' triggered by {det_label} ({det_conf:.0%}). Action: {action_type}"
             if speak_text:
                 msg += f' → "{speak_text}"'
 

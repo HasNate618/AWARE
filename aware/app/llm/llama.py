@@ -11,17 +11,22 @@ from aware.app.llm.interface import RuleSpec
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = """You are a home automation assistant. Output ONLY valid JSON with fields: name, when, then, priority.
-
-Examples:
-User: When someone walks in, say welcome
-Output: {"name": "greet_person", "when": "person detected", "then": "say welcome", "priority": "normal"}
-
-User: If glass breaks after 10pm, sound alarm
-Output: {"name": "night_glass_break", "when": "glass breaking sound and after 10pm", "then": "sound alarm", "priority": "high"}
-
-User: When doorbell rings, flash green
-Output: {"name": "doorbell_alert", "when": "doorbell sound", "then": "flash green", "priority": "normal"}"""
+_SYSTEM_PROMPT = (
+    "You are a home automation assistant. Output ONLY valid JSON "
+    "with fields: name, when, then, priority.\n\n"
+    "Examples:\n"
+    'User: When someone walks in, say welcome\n'
+    'Output: {"name": "greet_person", "when": "person detected", '
+    '"then": "say welcome", "priority": "normal"}\n\n'
+    'User: If glass breaks after 10pm, sound alarm\n'
+    'Output: {"name": "night_glass_break", '
+    '"when": "glass breaking sound and after 10pm", '
+    '"then": "sound alarm", "priority": "high"}\n\n'
+    'User: When doorbell rings, flash green\n'
+    'Output: {"name": "doorbell_alert", '
+    '"when": "doorbell sound", '
+    '"then": "flash green", "priority": "normal"}'
+)
 
 _NAME_RE = re.compile(r"[^a-z0-9]+", re.IGNORECASE)
 
@@ -30,10 +35,11 @@ def _slugify(text: str) -> str:
     return _NAME_RE.sub("_", text.lower()).strip("_")[:50]
 
 
-def _extract_json(text: str) -> dict | None:
+def _extract_json(text: str) -> dict[str, object] | None:
     """Extract JSON object from LLM output."""
     try:
-        return json.loads(text)
+        result: dict[str, object] = json.loads(text)
+        return result
     except json.JSONDecodeError:
         pass
     idx = text.find("{")
@@ -46,13 +52,14 @@ def _extract_json(text: str) -> dict | None:
                 depth -= 1
                 if depth == 0:
                     try:
-                        return json.loads(text[idx : i + 1])
+                        result = json.loads(text[idx : i + 1])
+                        return result
                     except json.JSONDecodeError:
                         break
     return None
 
 
-def _normalize_value(val: str | list | None) -> str:
+def _normalize_value(val: str | list[str] | None) -> str:
     """Normalize LLM output: join lists with ' and ', strip whitespace."""
     if val is None:
         return ""
@@ -118,16 +125,22 @@ class LlamaLLM:
                 priority="normal",
             )
 
+        when_raw = parsed.get("when", user_input)
+        then_raw = parsed.get("then", "log event")
+        priority_raw = parsed.get("priority", "normal")
         return RuleSpec(
-            name=_slugify(parsed.get("name", user_input[:40])),
-            when=_normalize_value(parsed.get("when", user_input)),
-            then=_normalize_value(parsed.get("then", "log event")),
-            priority=_normalize_value(parsed.get("priority", "normal")),
+            name=_slugify(str(parsed.get("name", user_input[:40]))),
+            when=_normalize_value(str(when_raw) if not isinstance(when_raw, (str, list)) else when_raw),
+            then=_normalize_value(str(then_raw) if not isinstance(then_raw, (str, list)) else then_raw),
+            priority=_normalize_value(str(priority_raw) if not isinstance(priority_raw, (str, list)) else priority_raw),
         )
 
     async def query_memory(self, question: str, context: str) -> str:
         messages = [
-            {"role": "system", "content": "Answer the user's question based on the context provided."},
+            {
+                "role": "system",
+                "content": "Answer the user's question based on the context provided.",
+            },
             {"role": "user", "content": f"Context: {context}\n\nQuestion: {question}"},
         ]
         payload = {
@@ -146,4 +159,4 @@ class LlamaLLM:
             logger.exception("LLM memory query failed")
             return f"[error] Could not answer: {question}"
 
-        return data["choices"][0]["message"].get("content", "")
+        return str(data["choices"][0]["message"].get("content", ""))
