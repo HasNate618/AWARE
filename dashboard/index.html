@@ -7,34 +7,32 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; overflow-x: hidden; font-family: system-ui, 'SF Mono', 'Fira Code', monospace; background: #0a0a0a; color: #e0e0e0; }
+        html, body { width: 100%; overflow-x: hidden; font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace; background: #0a0a0a; color: #e0e0e0; }
         #app { width: 100%; }
 
         .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-        .login-box { background: #111; border: 1px solid #333; border-radius: 16px; padding: 48px 40px 36px; max-width: 400px; width: 100%; text-align: center; }
+        .login-box { background: #111; border: 1px solid #2a2a2a; border-radius: 16px; padding: 48px 44px 40px; max-width: 420px; width: 100%; }
 
-        .acronym-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin-bottom: 24px; }
-        .acronym-col { display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
-        .acronym-col .letter { font-size: 36px; font-weight: 700; color: #00ff88; margin-bottom: 6px; letter-spacing: 0; }
-        .acronym-col span:not(.letter) { font-size: 9px; color: #666; text-transform: lowercase; display: block; }
-        .acronym-col .word { display: flex; flex-direction: column; align-items: center; }
-        .acronym-col .word span { font-size: 9px; line-height: 1.15; color: #555; }
+        .acronym { display: flex; flex-direction: column; gap: 8px; margin-bottom: 32px; }
+        .acronym-row { display: flex; align-items: center; gap: 16px; justify-content: flex-end; }
+        .acronym-letter { font-size: 32px; font-weight: 800; color: #00ff88; font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace; letter-spacing: -1px; min-width: 32px; text-align: right; }
+        .acronym-word { font-size: 15px; color: #666; text-transform: lowercase; letter-spacing: 0.3px; }
+        .acronym-dot { color: #00ff88; font-size: 28px; font-weight: 700; margin-right: 2px; }
 
-        .login-tagline { color: #555; font-size: 11px; margin-bottom: 28px; letter-spacing: 2px; text-transform: uppercase; }
-        .login-box input { width: 100%; background: #0a0a0a; border: 1px solid #333; border-radius: 8px; padding: 12px 14px; color: #e0e0e0; font-family: inherit; font-size: 15px; margin-bottom: 16px; transition: border-color .15s; }
+        .login-box input { width: 100%; background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 12px 14px; color: #e0e0e0; font-family: inherit; font-size: 14px; margin-bottom: 16px; transition: border-color .15s; }
         .login-box input:focus { outline: none; border-color: #00ff88; }
-        .login-box .login-btn { width: 100%; background: #00ff88; color: #000; border: none; border-radius: 8px; padding: 12px; font-family: inherit; font-weight: 700; font-size: 15px; cursor: pointer; transition: opacity .15s; }
+        .login-box .login-btn { width: 100%; background: #00ff88; color: #000; border: none; border-radius: 8px; padding: 12px; font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer; transition: opacity .15s; }
         .login-box .login-btn:hover { opacity: .85; }
 
-        .header { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #111; border-bottom: 1px solid #222; width: 100%; }
-        .header h1 { font-size: 15px; color: #00ff88; font-weight: 700; white-space: nowrap; }
+        .header { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: #111; border-bottom: 1px solid #222; width: 100%; }
+        .header h1 { font-size: 15px; color: #00ff88; font-weight: 700; white-space: nowrap; letter-spacing: 1px; }
         .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #00ff88; animation: pulse 2s infinite; flex-shrink: 0; }
         .status-dot.offline { background: #ff4444; animation: none; }
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
-        .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-        .header-right span { font-size: 11px; color: #666; }
-        .header-right a { font-size: 11px; color: #555; cursor: pointer; text-decoration: none; }
-        .header-right a:hover { color: #ff4444; }
+        .header-right { margin-left: auto; display: flex; align-items: center; flex-shrink: 0; }
+        .logout-icon { background: none; border: none; color: #555; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1; }
+        .logout-icon:hover { color: #ff4444; }
+        .logout-icon svg { width: 18px; height: 18px; fill: currentColor; }
 
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; max-width: 1400px; margin: 0 auto; width: 100%; }
         @media (max-width: 700px) { .grid { grid-template-columns: 1fr; gap: 6px; padding: 6px; } }
@@ -89,7 +87,6 @@
         @media (max-width: 700px) {
             .header { padding: 6px 10px; gap: 6px; }
             .header h1 { font-size: 13px; }
-            .header-right span { font-size: 10px; }
             .card { padding: 8px; }
             .card h2 { font-size: 10px; margin-bottom: 6px; }
             .grid { gap: 6px; padding: 6px; }
@@ -100,9 +97,9 @@
             .activity-item { flex-wrap: wrap; gap: 4px; }
             .chart-wrap { height: 130px; }
             .video-wrap { aspect-ratio: 16/9; }
-            .acronym-col .letter { font-size: 26px; }
-            .acronym-col span:not(.letter), .acronym-col .word span { font-size: 7px; }
-            .login-box { padding: 32px 20px 24px; }
+            .login-box { padding: 32px 20px 28px; }
+            .acronym-letter { font-size: 26px; min-width: 26px; }
+            .acronym-word { font-size: 13px; }
         }
     </style>
 </head>
@@ -112,27 +109,26 @@
 <script>
     const API = window.location.origin;
 
-    const WORDS = ['Autonomous', 'Witness', 'And', 'Response', 'Engine'];
-
     function acronymHTML() {
-        let html = '<div class="acronym-grid">';
+        const letters = 'AWARE';
+        const words = ['Autonomous', 'Witness', 'And', 'Response', 'Engine'];
+        let html = '<div class="acronym">';
         for (let i = 0; i < 5; i++) {
-            const word = WORDS[i];
-            html += '<div class="acronym-col"><span class="letter">' + 'AWARE'[i] + '</span><div class="word">';
-            for (const ch of word.toLowerCase()) {
-                html += '<span>' + ch + '</span>';
-            }
-            html += '</div></div>';
+            html += '<div class="acronym-row">' +
+                '<span class="acronym-letter">' + letters[i] + '</span>' +
+                '<span class="acronym-word">' + words[i] + '</span>' +
+                '</div>';
         }
         html += '</div>';
         return html;
     }
 
+    const LOGOUT_SVG = '<svg viewBox="0 0 24 24"><path d="M16 17v-3H9v-4h7V7l5 5-5 5M14 2a2 2 0 0 1 2 2v2h-2V4H5v16h9v-2h2v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9z"/></svg>';
+
     function showLogin() {
         document.getElementById('app').innerHTML =
             '<div class="login-wrap"><div class="login-box">' +
             acronymHTML() +
-            '<div class="login-tagline">Autonomous Witness And Response Engine</div>' +
             '<input type="password" id="loginPass" placeholder="password" autofocus>' +
             '<button class="login-btn" id="loginBtn">Login</button>' +
             '</div></div>';
@@ -151,8 +147,7 @@
             '<div class="status-dot" id="statusDot"></div>' +
             '<h1>A.W.A.R.E.</h1>' +
             '<div class="header-right">' +
-            '<span id="statusText">connecting</span>' +
-            '<a id="logoutLink">logout</a>' +
+            '<button class="logout-icon" id="logoutLink" title="logout">' + LOGOUT_SVG + '</button>' +
             '</div></div>' +
             '<div class="grid">' +
             '<div class="card full"><h2>Command</h2><div class="command-form"><input type="text" class="command-input" id="commandInput" placeholder=\'e.g. "when person detected, say hello"\'>' +
@@ -181,9 +176,8 @@
 
         async function get(p) { try { const r = await fetch(API + p); return r.ok ? r.json() : null; } catch (e) { return null; } }
         function setConn(ok) {
-            const d = document.getElementById('statusDot'), t = document.getElementById('statusText');
+            const d = document.getElementById('statusDot');
             if (d) d.className = 'status-dot' + (ok ? '' : ' offline');
-            if (t) t.textContent = ok ? 'connected' : 'disconnected';
         }
         function ts(t) { return t ? new Date(t * 1000).toLocaleTimeString() : '--'; }
         function pc(c) { return Math.round(c * 100); }
