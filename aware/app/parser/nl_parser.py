@@ -30,17 +30,22 @@ class ParsedRule:
     priority: str = "normal"
 
 
-def parse_when(text: str) -> list[Trigger]:
+def parse_when(text: str, raw: str | None = None) -> list[Trigger]:
+    """Parse when text into triggers. `raw` is the original user input (used for transition detection)."""
     triggers: list[Trigger] = []
     seen: set[tuple[str, str, str]] = set()
     lower = text.lower()
     parts = [p.strip() for p in lower.replace(" & ", " and ").split(" and ")]
+
+    # Use raw input for transition detection if available (LLM may strip transitions)
+    transition_source = (raw or text).lower()
+
     for part in parts:
         part_lower = part
-        # Detect transition keyword in this part
+        # Detect transition keyword across the full raw command
         trans: str | None = None
         for kw, t in vocab.TRANSITIONS.items():
-            if kw in part_lower:
+            if kw in transition_source:
                 trans = t
                 break
         # Find sounds in this part
@@ -102,10 +107,12 @@ def parse_then(text: str) -> list[Action]:
     return actions
 
 
-def parse_rule(name: str, when: str, then: str, priority: str = "normal") -> ParsedRule:
+def parse_rule(
+    name: str, when: str, then: str, priority: str = "normal", raw: str | None = None
+) -> ParsedRule:
     return ParsedRule(
         name=name,
-        triggers=parse_when(when),
+        triggers=parse_when(when, raw=raw),
         actions=parse_then(then),
         priority=priority,
     )

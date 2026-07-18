@@ -395,8 +395,8 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
     # 1. LLM parses the NL command into RuleSpec
     spec: RuleSpec = await llm.create_rule(req.command)
 
-    # 2. NL parser compiles triggers + actions
-    parsed = parse_rule(spec.name, spec.when, spec.then, spec.priority)
+    # 2. NL parser compiles triggers + actions (pass raw command for transition detection)
+    parsed = parse_rule(spec.name, spec.when, spec.then, spec.priority, raw=req.command)
 
     # 3. Store the rule
     triggers_dicts: list[dict[str, object]] = [
