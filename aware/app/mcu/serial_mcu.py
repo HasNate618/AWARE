@@ -129,6 +129,12 @@ class SerialMCU:
                     SensorReading(sensor=name, value=float(val), timestamp=now)
                 )
 
+        intensity = self._rpc_call("movement_intensity")
+        if isinstance(intensity, (int, float)):
+            readings.append(
+                SensorReading(sensor="movement_intensity", value=float(intensity), timestamp=now)
+            )
+
         if readings:
             return readings
         return self._mock.read_all()
