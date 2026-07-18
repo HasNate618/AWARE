@@ -59,50 +59,88 @@ def _dominant_freq(audio: np.ndarray, sr: int) -> tuple[float, float]:
     fft = np.abs(np.fft.rfft(audio))
     freqs = np.fft.rfftfreq(len(audio), 1.0 / sr)
     # Ignore DC and very low frequencies
-    mask = freqs > 50
+    mask = freqs > 100
     if not mask.any():
         return (0.0, 0.0)
     fft_masked = fft[mask]
     freqs_masked = freqs[mask]
     peak_idx = fft_masked.argmax()
     peak_freq = freqs_masked[peak_idx]
-    peak_strength = fft_masked[peak_idx] / (fft_masked.sum() + 1e-10)
-    return (float(peak_freq), float(min(peak_strength * 5, 1.0)))
+    peak_val = fft_masked[peak_idx]
+    # Strength = how much the peak stands out above the noise floor
+    median_val = np.median(fft_masked)
+    if median_val < 1e-10:
+        return (float(peak_freq), 0.0)
+    snr = peak_val / median_val  # signal-to-noise ratio
+    # Map SNR to 0-1: SNR of 3 = weak (0.3), SNR of 10 = strong (0.8), SNR of 20+ = very strong (1.0)
+    strength = min(max((snr - 2) / 15, 0.0), 1.0)
+    return (float(peak_freq), float(strength))
+
+
+def _band_energy(audio: np.ndarray, sr: int, fmin: int, fmax: int) -> float:
+    """Fraction of total energy in a frequency band (0-1)."""
+    fft = np.abs(np.fft.rfft(audio))
+    freqs = np.fft.rfftfreq(len(audio), 1.0 / sr)
+    total_energy = np.sum(fft ** 2)
+    if total_energy < 1e-10:
+        return 0.0
+    band_mask = (freqs >= fmin) & (freqs <= fmax)
+    band_energy = np.sum(fft[band_mask] ** 2)
+    return float(band_energy / total_energy)
 
 
 def _classify_sound(
     audio: np.ndarray, sr: int, rms: float, energy_threshold: float
 ) -> list[tuple[str, float]]:
     """Classify audio chunk into sound events with confidence scores."""
-    if rms < energy_threshold * 0.8:
+    if rms < energy_threshold:
         return [("silence", 0.9)]
 
-    centroid = _spectral_centroid(audio, sr)
     dom_freq, dom_strength = _dominant_freq(audio, sr)
-    detections: list[tuple[str, float]] = []
-
-    # Normalize energy (0-1)
     norm_energy = min(rms / (energy_threshold * 5), 1.0)
 
+    # Only classify if we have a clear spectral peak
+    if dom_strength < 0.2:
+        return [("ambient", round(norm_energy * 0.5, 3))]
+
+    detections: list[tuple[str, float]] = []
+
     for label, (fmin, fmax) in _FREQ_RANGES.items():
-        # Check if dominant frequency falls in range
+        # Peak must be within the frequency range
         if fmin <= dom_freq <= fmax:
-            # Confidence based on energy + frequency match + spectral strength
-            conf = norm_energy * 0.4 + dom_strength * 0.4
-            # Boost confidence for high-energy events
-            if rms > energy_threshold * 3:
-                conf = min(conf + 0.25, 1.0)
-            if conf > 0.1:
+            # Also check that significant energy is in this band
+            band_frac = _band_energy(audio, sr, fmin, fmax)
+            if band_frac < 0.15:
+                continue  # Not enough energy in this band
+            # Confidence: strong peak + high energy + good band match
+            conf = dom_strength * 0.5 + norm_energy * 0.2 + band_frac * 0.3
+            if conf > 0.35:
                 detections.append((label, round(conf, 3)))
 
-    # Speech detection: centroid in speech range + some energy
-    if 300 < centroid < 3400 and norm_energy > 0.1:
-        has_speech = any(d[0] == "speech" for d in detections)
-        if not has_speech:
-            detections.append(("speech", round(norm_energy * 0.6, 3)))
+    # Speech: check for harmonic structure (voice has harmonics at ~100-300Hz spacing)
+    if 200 < dom_freq < 4000 and norm_energy > 0.15:
+        fft = np.abs(np.fft.rfft(audio))
+        freqs = np.fft.rfftfreq(len(audio), 1.0 / sr)
+        # Look for harmonics: peaks at f0, 2*f0, 3*f0 where f0 ~ 80-300Hz
+        speech_score = 0
+        for f0 in [100, 150, 200, 250]:
+            harmonic_strength = 0
+            for h in range(1, 5):
+                h_freq = f0 * h
+                h_idx = np.argmin(np.abs(freqs - h_freq))
+                if h_idx < len(fft):
+                    harmonic_strength += fft[h_idx]
+            if harmonic_strength > 0:
+                speech_score = max(speech_score, harmonic_strength / (fft.sum() + 1e-10))
+        if speech_score > 0.01:
+            detections.append(("speech", round(min(speech_score * 20, 0.9), 3)))
 
-    if not detections and rms > energy_threshold * 2:
-        detections.append(("ambient", round(norm_energy, 3)))
+    if not detections:
+        return [("ambient", round(norm_energy * 0.3, 3))]
+
+    # Return top detection only
+    detections.sort(key=lambda x: x[1], reverse=True)
+    return [detections[0]]
 
     # Sort by confidence, return top 3
     detections.sort(key=lambda x: x[1], reverse=True)
