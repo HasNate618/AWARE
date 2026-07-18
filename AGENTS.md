@@ -211,10 +211,10 @@ This section captures where the project was left off. OpenCode should read this 
 - **BT speaker**: Paired (TWS Mini Speaker, 15:D2:D2:C5:6B:0C). Works via BlueALSA (`aplay -D bluealsa`). Volume control: `amixer -D bluealsa sset "TWS Mini Speaker A2DP" 5%`. Auto-connect script at scripts/connect-bt.sh (not yet in service, manual `bluetoothctl connect` for now).
 - **Speak action**: Implemented in aware/app/action/speaker.py using espeak-ng + BlueALSA. Wired into action handler in main.py (fires on action type "speak"). 3s debounce, strips action verb prefix, volume 5%.
 - **Built-in audio**: Broken. Qualcomm SoundWire driver has deferred probe loop (`lpass-tx-swr-active-state`). Use BlueALSA for all audio output.
-- **Rule creation**: Stub LLM parses "when X say Y" correctly. Triggers: detection, sound, time. AND semantics across types.
+- **Rule creation**: Real LLM (MiniCPM5 Q4, ~30s per command) or stub LLM parses "when X say Y" correctly. Triggers: detection, sound, time. AND semantics across types.
 - **Dashboard**: Live MJPEG video, detection log with timestamps, rules, activity log, command input.
 - **Systemd service**: aware.service installed, enabled, auto-restarts. Working directory /home/arduino/aware.
-- **Real LLM**: llama.cpp server running on board at port 8080. Not yet wired (set AWARE_LLM_SERVER_URL in .env).
+- **Real LLM**: llama.cpp server running on board at port 8080 with MiniCPM5-1B Q4_K_M (657MB). Wired via AWARE_LLM_SERVER_URL in .env.
 
 ### Board details
 - User: arduino, password: aware2026
@@ -228,15 +228,13 @@ This section captures where the project was left off. OpenCode should read this 
 - espeak-ng installed for TTS
 
 ### What to do next
-1. Wire real LLM (set AWARE_LLM_SERVER_URL=http://127.0.0.1:8080 in ~/aware/.env)
-2. Fix PipeWire BT audio (bluez5 SPA plugin not creating sink for TWS Mini Speaker)
-3. Test speak action end-to-end via rule trigger
-4. Telegram notification action
-5. LED control via STM32 MCU bus
+1. Telegram notification action
+2. LED control via STM32 MCU bus
+3. Test speak action end-to-end via rule trigger (currently working)
+4. Performance optimization (LLM is ~30s per command on Q4, could try Q8 again with more free RAM)
 
 ### Recent commits
-- 782d1a0 feat: speak action via espeak-ng + built-in audio
-- e5d091b fix: energy event detection, stop false positives
-- 3fa1e23 fix: smarter sound classification, stop false positives
-- 035a89c misc fixes: YOLO label map, YAMNet energy detection, dashboard charts, speaker tweaks
+- 280b63f fix: faster LLM prompt + 60s timeout
+- 71e1c67 fix: speak via BlueALSA BT speaker + volume 5%
+- 9803438 fix: classify specific sound types on energy events
 - Full repo at https://github.com/HasNate618/AWARE

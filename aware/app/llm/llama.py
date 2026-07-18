@@ -13,9 +13,20 @@ from aware.app.llm.interface import RuleSpec
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
-    "Output JSON with keys: name, when, then, priority. "
+    "Create a rule from the user's command. "
     'Ex: {"name": "greet", "when": "person detected", '
     '"then": "say welcome", "priority": "normal"}\n'
+)
+
+# Grammar forces valid JSON with the 4 fields we need
+_JSON_GRAMMAR = (
+    'root ::= "{" ws '
+    '"\\"name\\"" ws ":" ws string ws "," ws '
+    '"\\"when\\"" ws ":" ws string ws "," ws '
+    '"\\"then\\"" ws ":" ws string ws "," ws '
+    '"\\"priority\\"" ws ":" ws string ws "}"\n'
+    "string ::= \"\\\"\" (![\"\\\\] | \"\\\\\" (\"\\\\\" | \"/\" | \"b\" | \"f\" | \"n\" | \"r\" | \"t\" | \"u\" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* \"\\\"\"\n"
+    "ws ::= [ \\t\\n]?\n"
 )
 
 _NAME_RE = re.compile(r"[^a-z0-9]+", re.IGNORECASE)
@@ -72,20 +83,17 @@ class LlamaLLM:
         self.timeout = timeout
 
     async def create_rule(self, user_input: str) -> RuleSpec:
-        messages = [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_input},
-        ]
+        prompt = f"{_SYSTEM_PROMPT}\nUser: {user_input}\nOutput: "
         payload = {
-            "model": self.model,
-            "messages": messages,
+            "prompt": prompt,
+            "grammar": _JSON_GRAMMAR,
             "temperature": 0.1,
-            "max_tokens": 64,
+            "n_predict": 64,
         }
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(f"{self.base_url}/v1/chat/completions", json=payload)
+                resp = await client.post(f"{self.base_url}/completion", json=payload)
                 resp.raise_for_status()
                 data = resp.json()
         except Exception:
@@ -97,13 +105,8 @@ class LlamaLLM:
                 priority="normal",
             )
 
-        content = data["choices"][0]["message"].get("content", "")
-        timings = data.get("timings", {})
-        logger.info(
-            "LLM response: %d tokens, %.1f tok/s",
-            timings.get("predicted_n", 0),
-            timings.get("predicted_per_second", 0),
-        )
+        content = data.get("content", "")
+        logger.info("LLM response: %s", content)
 
         parsed = _extract_json(content)
         if not parsed:
