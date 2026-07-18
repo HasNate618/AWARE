@@ -37,6 +37,7 @@
         .log-item { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #1a1a1a; align-items: baseline; }
         .log-time { color: #555; flex-shrink: 0; width: 80px; }
         .log-label { color: #00ff88; font-weight: 600; flex-shrink: 0; width: 100px; }
+        .log-label.sound { color: #ffaa00; }
         .log-conf { color: #888; flex-shrink: 0; width: 45px; text-align: right; }
         .log-bar { flex: 1; min-width: 40px; }
         .log-bar-inner { height: 3px; background: #00ff8844; border-radius: 2px; }
@@ -178,9 +179,10 @@
             const list = document.getElementById('detectionLog');
             list.innerHTML = data.reverse().map(d => {
                 const pct = confPct(d.confidence);
+                const isSound = d.source === 'mic' || (!d.bbox && d.label);
                 return `<li class="log-item">
                     <span class="log-time">${timeStr(d.timestamp)}</span>
-                    <span class="log-label">${d.label}</span>
+                    <span class="log-label ${isSound ? 'sound' : ''}">${d.label}</span>
                     <span class="log-conf">${pct}%</span>
                     <span class="log-bar"><span class="log-bar-inner"><span class="log-bar-fill" style="width:${pct}%"></span></span></span>
                 </li>`;

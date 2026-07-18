@@ -41,6 +41,7 @@ async def perception_loop(bus: EventBus, camera: PerceptionSource, mic: YAMNetMi
         asyncio.create_task(camera.run_inference_loop())
     # Start mic detection loop
     if mic is not None:
+        await mic.start()
         asyncio.create_task(mic.run_detection_loop())
     try:
         while True:
