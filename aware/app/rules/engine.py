@@ -30,6 +30,9 @@ def _parse_time_range(raw: Any) -> tuple[int, int] | None:
 class RulesEngine:
     """Evaluates active rules against latest perception data every 500ms."""
 
+    # Minimum seconds between re-executions of the same rule
+    COOLDOWN: float = 5.0
+
     def __init__(
         self,
         store: RulesStore,
@@ -41,6 +44,7 @@ class RulesEngine:
         self.db = db
         self._last_snapshot: PerceptionSnapshot | None = None
         self._snap_handler = self._on_snapshot
+        self._last_fired: dict[str, float] = {}  # rule name -> last execution time
 
     def _on_snapshot(self, event: dict[str, Any]) -> None:
         self._last_snapshot = event.get("snapshot")
@@ -54,10 +58,17 @@ class RulesEngine:
     async def evaluate(self) -> None:
         if not self._last_snapshot:
             return
+        now = time.time()
         rules = await self.store.get_active()
         for rule in rules:
+            name = rule.get("name", "unknown")
+            # Cooldown: skip if this rule fired recently
+            last = self._last_fired.get(str(name), 0.0)
+            if now - last < self.COOLDOWN:
+                continue
             matched_det = self._find_matching_detection(rule, self._last_snapshot)
             if matched_det:
+                self._last_fired[str(name)] = now
                 await self._execute(rule, matched_det)
 
     def _find_matching_detection(
@@ -67,14 +78,21 @@ class RulesEngine:
         triggers: list[dict[str, str]] = rule.get("triggers", [])  # type: ignore[assignment]
         if not triggers:
             return None
+
+        # Build candidate focus items from detections, sounds, and enter/exit transitions
+        candidates: list[Detection] = list(snapshot.detections)
+        for label in snapshot.entered:
+            if not any(d.label == label for d in candidates):
+                candidates.append(Detection(label=label, confidence=1.0))
+        for label in snapshot.exited:
+            if not any(d.label == label for d in candidates):
+                candidates.append(Detection(label=label, confidence=1.0))
+        candidates.extend(snapshot.sounds)
+
         # AND semantics: ALL triggers must match
-        for det in snapshot.detections:
-            if all(self._trigger_matches(t, snapshot, det) for t in triggers):
-                return det
-        # Check sounds too
-        for snd in snapshot.sounds:
-            if all(self._trigger_matches(t, snapshot, snd) for t in triggers):
-                return snd
+        for focus in candidates:
+            if all(self._trigger_matches(t, snapshot, focus) for t in triggers):
+                return focus
         return None
 
     def _matches(self, rule: dict[str, object], snapshot: PerceptionSnapshot) -> bool:
@@ -85,7 +103,13 @@ class RulesEngine:
     ) -> bool:
         t_type = trigger.get("type", "")
         t_value = trigger.get("value", "")
+        t_transition = trigger.get("transition")
         if t_type == "detection":
+            if t_transition == "enter":
+                return t_value in snapshot.entered
+            elif t_transition == "exit":
+                return t_value in snapshot.exited
+            # No transition: match any current detection (existing behavior)
             if focus and focus.label == t_value:
                 return True
             return any(d.label == t_value for d in snapshot.detections)

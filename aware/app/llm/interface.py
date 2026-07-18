@@ -10,6 +10,7 @@ class RuleSpec:
     when: str
     then: str
     priority: str = "normal"
+    raw: str = ""
 
 
 @runtime_checkable

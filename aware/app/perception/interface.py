@@ -16,6 +16,8 @@ class Detection:
 class PerceptionSnapshot:
     detections: list[Detection] = field(default_factory=list)
     sounds: list[Detection] = field(default_factory=list)
+    entered: list[str] = field(default_factory=list)   # labels newly present this frame
+    exited: list[str] = field(default_factory=list)    # labels present last frame, gone now
     source: str = "unknown"
     timestamp: float = 0.0
 

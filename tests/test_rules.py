@@ -1,6 +1,3 @@
-import pytest
-from aiosqlite import IntegrityError
-
 from aware.app.rules.store import RulesStore
 
 
@@ -25,7 +22,10 @@ async def test_deactivate(store: RulesStore) -> None:
     assert len(rules) == 0
 
 
-async def test_unique_name_constraint(store: RulesStore) -> None:
+async def test_unique_name_with_suffix(store: RulesStore) -> None:
     await store.add("dup", "a", "b", "normal", [], [])
-    with pytest.raises(IntegrityError):
-        await store.add("dup", "c", "d", "normal", [], [])
+    final = await store.add("dup", "c", "d", "normal", [], [])
+    assert final != "dup"  # suffix appended
+    assert final.startswith("dup_")
+    rules = await store.get_active()
+    assert len(rules) == 2

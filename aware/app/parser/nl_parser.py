@@ -13,6 +13,7 @@ class Trigger:
     type: str
     value: str
     time_range: tuple[int, int] | None = None
+    transition: str | None = None  # "enter", "exit", or None for any presence
 
 
 @dataclass
@@ -31,28 +32,39 @@ class ParsedRule:
 
 def parse_when(text: str) -> list[Trigger]:
     triggers: list[Trigger] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
     lower = text.lower()
     parts = [p.strip() for p in lower.replace(" & ", " and ").split(" and ")]
-    search_text = " ".join(parts)
-    for keyword, label in vocab.SOUNDS.items():
-        if keyword in search_text:
-            key = ("sound", label)
-            if key not in seen:
-                triggers.append(Trigger(type="sound", value=label))
-                seen.add(key)
-    for keyword, label in vocab.OBJECTS.items():
-        if keyword in search_text:
-            key = ("detection", label)
-            if key not in seen:
-                triggers.append(Trigger(type="detection", value=label))
-                seen.add(key)
-    for keyword, (start, end) in vocab.TIMES.items():
-        if keyword in search_text:
-            key = ("time", keyword)
-            if key not in seen:
-                triggers.append(Trigger(type="time", value=keyword, time_range=(start, end)))
-                seen.add(key)
+    for part in parts:
+        part_lower = part
+        # Detect transition keyword in this part
+        trans: str | None = None
+        for kw, t in vocab.TRANSITIONS.items():
+            if kw in part_lower:
+                trans = t
+                break
+        # Find sounds in this part
+        for keyword, label in vocab.SOUNDS.items():
+            if keyword in part_lower:
+                key = ("sound", label, "")
+                if key not in seen:
+                    triggers.append(Trigger(type="sound", value=label))
+                    seen.add(key)
+        # Find objects in this part (with optional transition)
+        for keyword, label in vocab.OBJECTS.items():
+            if keyword in part_lower:
+                key = ("detection", label, trans or "")
+                if key not in seen:
+                    triggers.append(Trigger(type="detection", value=label, transition=trans))
+                    seen.add(key)
+        # Find times in this part
+        for keyword, (start, end) in vocab.TIMES.items():
+            if keyword in part_lower:
+                key = ("time", keyword, "")
+                if key not in seen:
+                    triggers.append(Trigger(type="time", value=keyword, time_range=(start, end)))
+                    seen.add(key)
+    # Also check full text for absolute time patterns
     match = vocab.TIME_RE.search(text)
     if match:
         hour = int(match.group(1))
@@ -61,7 +73,7 @@ def parse_when(text: str) -> list[Trigger]:
             hour += 12
         elif ampm == "am" and hour == 12:
             hour = 0
-        key = ("time", f"after {hour}:00")
+        key = ("time", f"after {hour}:00", "")
         if key not in seen:
             triggers.append(Trigger(type="time", value=f"after {hour}:00", time_range=(hour, 24)))
     return triggers

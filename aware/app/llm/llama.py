@@ -125,6 +125,7 @@ class LlamaLLM:
                 when=user_input,
                 then="log event",
                 priority="normal",
+                raw=content[:500],
             )
 
         when_raw = parsed.get("when", user_input)
@@ -141,6 +142,7 @@ class LlamaLLM:
             when=_normalize_value(_coerce(when_raw, user_input)),
             then=_normalize_value(_coerce(then_raw, "log event")),
             priority=_normalize_value(_coerce(priority_raw, "normal")),
+            raw=content[:1000],
         )
 
     async def query_memory(self, question: str, context: str) -> str:

@@ -99,3 +99,18 @@ COLORS: Final[dict[str, tuple[int, int, int]]] = {
     "orange": (255, 165, 0),
     "purple": (128, 0, 128),
 }
+
+TRANSITIONS: Final[dict[str, str]] = {
+    "enters": "enter",
+    "entered": "enter",
+    "comes in": "enter",
+    "walks in": "enter",
+    "arrives": "enter",
+    "leaves": "exit",
+    "left": "exit",
+    "exits": "exit",
+    "exited": "exit",
+    "goes out": "exit",
+    "walks out": "exit",
+    "departs": "exit",
+}

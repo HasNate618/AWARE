@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import random
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS rules (
     priority TEXT NOT NULL DEFAULT 'normal',
     triggers_json TEXT NOT NULL DEFAULT '[]',
     actions_json TEXT NOT NULL DEFAULT '[]',
+    llm_raw TEXT NOT NULL DEFAULT '',
     active INTEGER NOT NULL DEFAULT 1,
     created_at REAL NOT NULL
 );
@@ -26,12 +28,13 @@ CREATE TABLE IF NOT EXISTS rules (
 
 _INSERT = """
 INSERT INTO rules
-    (name, when_text, then_text, priority, triggers_json, actions_json, active, created_at)
-VALUES (?, ?, ?, ?, ?, ?, 1, ?);
+    (name, when_text, then_text, priority, triggers_json, actions_json, llm_raw, active, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?);
 """
 
 _SELECT_ACTIVE = """
-SELECT id, name, when_text, then_text, priority, triggers_json, actions_json, active, created_at
+SELECT id, name, when_text, then_text, priority,
+       triggers_json, actions_json, llm_raw, active, created_at
 FROM rules WHERE active = 1 ORDER BY id;
 """
 
@@ -48,6 +51,9 @@ class RulesStore:
     async def open(self) -> None:
         self._db = await aiosqlite.connect(self._db_path)
         await self._db.execute(_CREATE_TABLE)
+        # Migrate: add llm_raw if missing (pre-existing DBs)
+        with contextlib.suppress(aiosqlite.OperationalError):
+            await self._db.execute("ALTER TABLE rules ADD COLUMN llm_raw TEXT NOT NULL DEFAULT ''")
         await self._db.commit()
 
     async def close(self) -> None:
@@ -63,6 +69,7 @@ class RulesStore:
         priority: str,
         triggers: list[dict[str, object]],
         actions: list[dict[str, object]],
+        llm_raw: str = "",
     ) -> str:
         """Add a rule. Returns the final name (may have suffix if duplicate)."""
         if not self._db:
@@ -79,6 +86,7 @@ class RulesStore:
                         priority,
                         json.dumps(triggers),
                         json.dumps(actions),
+                        llm_raw,
                         time.time(),
                     ),
                 )
@@ -106,8 +114,9 @@ class RulesStore:
                 "priority": row[4],
                 "triggers": json.loads(row[5]),
                 "actions": json.loads(row[6]),
-                "active": bool(row[7]),
-                "created_at": row[8],
+                "llm_raw": row[7],
+                "active": bool(row[8]),
+                "created_at": row[9],
             }
             for row in rows
         ]
