@@ -174,7 +174,9 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 
     # Choose LLM: stub (instant, deterministic) or real (llama.cpp server)
     if settings.llm_server_url:
-        llm: StubLLM | LlamaLLM = LlamaLLM(base_url=settings.llm_server_url, timeout=settings.llm_timeout)
+        llm: StubLLM | LlamaLLM = LlamaLLM(
+            base_url=settings.llm_server_url, timeout=settings.llm_timeout,
+        )
         logger.info("Using real LLM at %s", settings.llm_server_url)
     else:
         llm = StubLLM()

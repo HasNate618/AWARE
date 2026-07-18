@@ -7,21 +7,21 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; overflow-x: hidden; font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace; background: #0a0a0a; color: #e0e0e0; }
+        html, body { width: 100%; overflow-x: hidden; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', monospace; background: #0a0a0a; color: #e0e0e0; }
         #app { width: 100%; }
 
         .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-        .login-box { background: #111; border: 1px solid #2a2a2a; border-radius: 16px; padding: 48px 44px 40px; max-width: 420px; width: 100%; }
+        .login-box { background: #111; border: 1px solid #2a2a2a; border-radius: 16px; padding: 36px 32px 32px; max-width: 380px; width: 100%; }
 
-        .acronym { display: flex; flex-direction: column; gap: 8px; margin-bottom: 32px; }
-        .acronym-row { display: flex; align-items: center; gap: 16px; justify-content: flex-end; }
-        .acronym-letter { font-size: 32px; font-weight: 800; color: #00ff88; font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace; letter-spacing: -1px; min-width: 32px; text-align: right; }
-        .acronym-word { font-size: 15px; color: #666; text-transform: lowercase; letter-spacing: 0.3px; }
-        .acronym-dot { color: #00ff88; font-size: 28px; font-weight: 700; margin-right: 2px; }
+        .acronym { display: flex; gap: 2px; justify-content: center; margin-bottom: 28px; }
+        .acronym-col { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+        .acronym-letter { font-size: 30px; font-weight: 800; color: #00ff88; font-family: 'JetBrains Mono', 'Fira Code', monospace; letter-spacing: -1px; line-height: 1; margin-bottom: 4px; padding: 0 8px; }
+        .acronym-chars { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
+        .acronym-chars span { font-size: 10px; color: #555; font-family: 'JetBrains Mono', 'Fira Code', monospace; padding: 0 8px; letter-spacing: 0; }
 
-        .login-box input { width: 100%; background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 12px 14px; color: #e0e0e0; font-family: inherit; font-size: 14px; margin-bottom: 16px; transition: border-color .15s; }
+        .login-box input { width: 100%; background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 11px 14px; color: #e0e0e0; font-family: inherit; font-size: 14px; margin-bottom: 14px; transition: border-color .15s; }
         .login-box input:focus { outline: none; border-color: #00ff88; }
-        .login-box .login-btn { width: 100%; background: #00ff88; color: #000; border: none; border-radius: 8px; padding: 12px; font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer; transition: opacity .15s; }
+        .login-box .login-btn { width: 100%; background: #00ff88; color: #000; border: none; border-radius: 8px; padding: 11px; font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer; transition: opacity .15s; }
         .login-box .login-btn:hover { opacity: .85; }
 
         .header { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: #111; border-bottom: 1px solid #222; width: 100%; }
@@ -42,8 +42,8 @@
         @media (max-width: 700px) { .full { grid-column: 1; } }
         .empty { color: #444; font-style: italic; font-size: 12px; }
 
-        .video-wrap { position: relative; background: #000; border-radius: 4px; overflow: hidden; aspect-ratio: 4/3; max-width: 100%; }
-        .video-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; max-width: 100%; }
+        .video-wrap { position: relative; background: #000; border-radius: 4px; overflow: hidden; width: 100%; }
+        .video-wrap img { width: 100%; height: auto; display: block; }
         .video-badge { position: absolute; top: 5px; left: 5px; background: #00ff8822; color: #00ff88; padding: 2px 7px; border-radius: 3px; font-size: 10px; }
         .video-badge.offline { background: #ff444422; color: #ff4444; }
 
@@ -75,6 +75,9 @@
         .command-feedback { margin-top: 5px; font-size: 11px; color: #00ff88; word-break: break-word; }
 
         .chart-wrap { height: 160px; position: relative; margin: 0 -2px; }
+        .chart-period { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+        .chart-period button { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px; padding: 3px 8px; color: #666; font-size: 10px; cursor: pointer; font-family: inherit; }
+        .chart-period button.active { background: #00ff8822; border-color: #00ff88; color: #00ff88; }
 
         .activity-list { list-style: none; max-height: 260px; overflow-y: auto; }
         .activity-item { padding: 4px 0; border-bottom: 1px solid #181818; font-size: 11px; display: flex; gap: 6px; align-items: baseline; }
@@ -96,10 +99,9 @@
             .activity-time { width: 50px; font-size: 9px; }
             .activity-item { flex-wrap: wrap; gap: 4px; }
             .chart-wrap { height: 130px; }
-            .video-wrap { aspect-ratio: 16/9; }
-            .login-box { padding: 32px 20px 28px; }
-            .acronym-letter { font-size: 26px; min-width: 26px; }
-            .acronym-word { font-size: 13px; }
+            .login-box { padding: 28px 18px 24px; }
+            .acronym-letter { font-size: 24px; }
+            .acronym-chars span { font-size: 9px; }
         }
     </style>
 </head>
@@ -114,10 +116,11 @@
         const words = ['Autonomous', 'Witness', 'And', 'Response', 'Engine'];
         let html = '<div class="acronym">';
         for (let i = 0; i < 5; i++) {
-            html += '<div class="acronym-row">' +
-                '<span class="acronym-letter">' + letters[i] + '</span>' +
-                '<span class="acronym-word">' + words[i] + '</span>' +
-                '</div>';
+            html += '<div class="acronym-col"><div class="acronym-letter">' + letters[i] + '</div><div class="acronym-chars">';
+            for (const ch of words[i]) {
+                html += '<span>' + ch + '</span>';
+            }
+            html += '</div></div>';
         }
         html += '</div>';
         return html;
@@ -127,11 +130,9 @@
 
     function showLogin() {
         document.getElementById('app').innerHTML =
-            '<div class="login-wrap"><div class="login-box">' +
-            acronymHTML() +
+            '<div class="login-wrap"><div class="login-box">' + acronymHTML() +
             '<input type="password" id="loginPass" placeholder="password" autofocus>' +
-            '<button class="login-btn" id="loginBtn">Login</button>' +
-            '</div></div>';
+            '<button class="login-btn" id="loginBtn">Login</button></div></div>';
         document.getElementById('loginBtn').onclick = () => {
             localStorage.setItem('aware_logged_in', '1');
             showDashboard();
@@ -143,21 +144,19 @@
 
     function showDashboard() {
         document.getElementById('app').innerHTML =
-            '<div class="header">' +
-            '<div class="status-dot" id="statusDot"></div>' +
-            '<h1>A.W.A.R.E.</h1>' +
-            '<div class="header-right">' +
-            '<button class="logout-icon" id="logoutLink" title="logout">' + LOGOUT_SVG + '</button>' +
-            '</div></div>' +
+            '<div class="header"><div class="status-dot" id="statusDot"></div><h1>A.W.A.R.E.</h1>' +
+            '<div class="header-right"><button class="logout-icon" id="logoutLink" title="logout">' + LOGOUT_SVG + '</button></div></div>' +
             '<div class="grid">' +
-            '<div class="card full"><h2>Command</h2><div class="command-form"><input type="text" class="command-input" id="commandInput" placeholder=\'e.g. "when person detected, say hello"\'>' +
+            '<div class="card full"><h2>Command</h2><div class="command-form"><input type="text" class="command-input" id="commandInput" placeholder=\'e.g. "when person detected"\'>' +
             '<button class="command-btn" id="commandBtn">Teach</button></div><div class="command-feedback" id="commandFeedback"></div></div>' +
             '<div class="card full"><h2>Camera</h2><div class="video-wrap"><img id="videoFeed" src="' + API + '/api/video" alt=""><div class="video-badge" id="cameraBadge">connecting</div></div></div>' +
             '<div class="card full"><h2>Workflows</h2><ul class="workflow-list" id="workflowList"><li class="empty">no active workflows</li></ul></div>' +
             '<div class="card full"><h2>Object Log</h2><ul class="log-list" id="objectLog"><li class="empty">waiting for detections</li></ul></div>' +
             '<div class="card full"><h2>Sound Log</h2><ul class="log-list" id="soundLog"><li class="empty">waiting for sounds</li></ul></div>' +
-            '<div class="card"><h2>Temperature</h2><div class="chart-wrap"><canvas id="tempChart"></canvas></div></div>' +
-            '<div class="card"><h2>Distance</h2><div class="chart-wrap"><canvas id="distChart"></canvas></div></div>' +
+            '<div class="card"><h2>Temperature <span style="color:#888;font-size:10px;text-transform:none">°C</span></h2>' +
+            '<div class="chart-period" id="tempPeriod"></div><div class="chart-wrap"><canvas id="tempChart"></canvas></div></div>' +
+            '<div class="card"><h2>Distance <span style="color:#888;font-size:10px;text-transform:none">cm</span></h2>' +
+            '<div class="chart-period" id="distPeriod"></div><div class="chart-wrap"><canvas id="distChart"></canvas></div></div>' +
             '<div class="card full"><h2>Activity</h2><ul class="activity-list" id="activityList"><li class="empty">no activity yet</li></ul></div>' +
             '</div>';
         initDashboard();
@@ -167,20 +166,58 @@
     else showLogin();
 
     function initDashboard() {
-        const API = window.location.origin;
-
         document.getElementById('logoutLink').onclick = () => {
             localStorage.removeItem('aware_logged_in');
             showLogin();
         };
 
         async function get(p) { try { const r = await fetch(API + p); return r.ok ? r.json() : null; } catch (e) { return null; } }
-        function setConn(ok) {
-            const d = document.getElementById('statusDot');
-            if (d) d.className = 'status-dot' + (ok ? '' : ' offline');
-        }
+        function setConn(ok) { const d = document.getElementById('statusDot'); if (d) d.className = 'status-dot' + (ok ? '' : ' offline'); }
         function ts(t) { return t ? new Date(t * 1000).toLocaleTimeString() : '--'; }
         function pc(c) { return Math.round(c * 100); }
+
+        const PERIODS = [
+            { label: '30s', window: 30, bucket: 5 },
+            { label: '5m', window: 300, bucket: 15 },
+            { label: '30m', window: 1800, bucket: 60 },
+            { label: '1h', window: 3600, bucket: 60 },
+            { label: '6h', window: 21600, bucket: 600 },
+        ];
+
+        const tempPeriodEl = document.getElementById('tempPeriod');
+        const distPeriodEl = document.getElementById('distPeriod');
+        let tempWindow = 3600, distWindow = 3600;
+        let tempBucket = 60, distBucket = 60;
+
+        function renderPeriodButtons(container, state) {
+            if (!container) return;
+            container.innerHTML = PERIODS.map(p =>
+                '<button data-window="' + p.window + '" data-bucket="' + p.bucket + '" class="' +
+                (p.window === state.window ? 'active' : '') + '">' + p.label + '</button>'
+            ).join('');
+        }
+
+        renderPeriodButtons(tempPeriodEl, { window: tempWindow });
+        renderPeriodButtons(distPeriodEl, { window: distWindow });
+
+        tempPeriodEl.onclick = (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            tempPeriodEl.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            tempWindow = +btn.dataset.window;
+            tempBucket = +btn.dataset.bucket;
+            upChart(tempC, 'sensor:temperature_c', tempWindow, tempBucket);
+        };
+        distPeriodEl.onclick = (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            distPeriodEl.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            distWindow = +btn.dataset.window;
+            distBucket = +btn.dataset.bucket;
+            upChart(distC, 'sensor:distance_cm', distWindow, distBucket);
+        };
 
         async function badge() {
             const d = await get('/api/snapshot');
@@ -243,8 +280,8 @@
             const btn = document.getElementById('commandBtn'), fb = document.getElementById('commandFeedback');
             btn.textContent = '...'; btn.disabled = true;
             try {
-                const r = await fetch(API + '/api/command', { method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                const r = await fetch(API + '/api/command', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ command: cmd }) });
                 if (r.ok) { const resp = await r.json(); inp.value = ''; fb.textContent = '✓ "' + resp.rule_name + '" created'; workflows(); updateActivity(); }
                 else fb.textContent = '✗ failed';
@@ -268,8 +305,10 @@
                 data: { labels: [], datasets: [{ label, data: [], borderColor: color, backgroundColor: color + '18', fill: true, tension: 0.15, pointRadius: 0, borderWidth: 2 }] },
                 options: {
                     responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
-                    scales: { x: { ticks: { color: '#444', maxTicksLimit: 6, font: { size: 8 } }, grid: { color: '#181818' } },
-                             y: { ticks: { color: '#444', font: { size: 8 } }, grid: { color: '#181818' } } },
+                    scales: {
+                        x: { ticks: { color: '#444', maxTicksLimit: 6, font: { size: 8 } }, grid: { color: '#181818' } },
+                        y: { ticks: { color: '#444', font: { size: 8 } }, grid: { color: '#181818' } },
+                    },
                     plugins: { legend: { display: false } },
                 },
             });
@@ -278,9 +317,9 @@
         const tempC = makeChart('tempChart', '°C', '#ff4444');
         const distC = makeChart('distChart', 'cm', '#0088ff');
 
-        async function upChart(ch, topic) {
+        async function upChart(ch, topic, window, bucket) {
             if (!ch) return;
-            const d = await get('/api/timeseries?topic=' + topic + '&window=3600&bucket=30');
+            const d = await get('/api/timeseries?topic=' + topic + '&window=' + window + '&bucket=' + bucket);
             if (!d || !d.length) return;
             ch.data.labels = d.map(x => new Date(x.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
             ch.data.datasets[0].data = d.map(x => x.avg);
@@ -306,13 +345,13 @@
         setInterval(workflows, 3000);
         setInterval(objects, 1000);
         setInterval(sounds, 1000);
-        setInterval(() => upChart(tempC, 'sensor:temperature_c'), 5000);
-        setInterval(() => upChart(distC, 'sensor:distance_cm'), 5000);
+        setInterval(() => upChart(tempC, 'sensor:temperature_c', tempWindow, tempBucket), 5000);
+        setInterval(() => upChart(distC, 'sensor:distance_cm', distWindow, distBucket), 5000);
         setInterval(updateActivity, 2000);
 
         badge(); workflows(); objects(); sounds();
-        upChart(tempC, 'sensor:temperature_c');
-        upChart(distC, 'sensor:distance_cm');
+        upChart(tempC, 'sensor:temperature_c', tempWindow, tempBucket);
+        upChart(distC, 'sensor:distance_cm', distWindow, distBucket);
         updateActivity();
     }
 </script>
