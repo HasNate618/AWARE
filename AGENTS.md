@@ -223,17 +223,36 @@ This section captures where the project was left off. OpenCode should read this 
 - Venv: /home/arduino/aware/.venv
 - Models: /home/arduino/aware/models/ (yolov8n.onnx, yamnet.onnx, yamnet_classes.csv)
 - Service: sudo systemctl start/stop/restart aware.service
+- Sudo passwordless: `ssh -n arduino@host 'echo aware2026 | sudo -S cmd'`
 - Logs: sudo journalctl -u aware.service -n 50
 - Deps: sounddevice, scipy, onnxruntime, opencv-python-headless, aiosqlite, python-dotenv, pydantic-settings
 - espeak-ng installed for TTS
 
+### STM32U585 / Modulino communication
+- **arduino-router** (`/usr/bin/arduino-router`) bridges QRB2210 ↔ STM32U585 over `/dev/ttyHS1` at 115200 baud.
+- Exposes msgpack-rpc on Unix socket `/var/run/arduino-router.sock` and TCP port 7500.
+- **Router protocol**: msgpack-rpc with 4-byte big-endian length prefix framing.
+  - Request: `[0, msgid, "method", [params]]`
+  - Response: `[1, msgid, error/None, result]`
+  - Methods: `mon/connected`, `mon/write(data)`, `mon/read(max_bytes)`, `$/serial/open`, `$/serial/close`
+  - Serial already opened at startup (router logs confirm). `mon/connected` returns `True`.
+  - `mon/write` sends bytes to STM32, `mon/read` reads from STM32 serial buffer.
+- **STM32 firmware** runs Zephyr RTOS with Arduino RPCLite. Firmware binary: `~/.arduino15/packages/arduino/hardware/zephyr/0.51.0/firmwares/zephyr-arduino_uno_q_stm32u585xx.elf`
+- **Arduino_RPCLite library** (`~/.arduino15/.../libraries/Arduino_RPCLite/`) provides msgpack RPC over serial.
+  - Client: `SerialClient(port, baudrate)` with `.call(method, *args)` and `.notify(method, *args)`.
+  - Wire format: raw msgpack `[0, msgid, "method", [args]]` (no length prefix on direct serial).
+- **Current status**: The STM32 runs the Zephyr bootloader firmware. No Modulino-reading sketch has been uploaded yet. The custom text protocol (`READ_ALL`, `LED:...`, etc.) in `serial_mcu.py` is our own design and requires STM32 firmware that implements these commands.
+- **To make Modulinos work**: Write an Arduino sketch (using RPCLite library) that registers RPC methods (e.g., `read_temp`, `read_distance`, `set_led`), compile and upload it to the STM32. Then update `serial_mcu.py` to send RPCLite msgpack calls through the router's `mon/write`/`mon/read` instead of direct serial.
+
 ### What to do next
 1. Telegram notification action
-2. LED control via STM32 MCU bus
+2. LED control via STM32 MCU bus (needs STM32 firmware first)
 3. Test speak action end-to-end via rule trigger (currently working)
-4. Performance optimization (LLM is ~30s per command on Q4, could try Q8 again with more free RAM)
+4. Performance optimization (LLM is ~30s per command on Q4, could try Q8 again with free RAM)
+5. STM32 firmware sketch for Modulino sensor reading + LED control via RPCLite
 
 ### Recent commits
+- 3305d0c feat: wire real serial MCU with mock fallback
 - 280b63f fix: faster LLM prompt + 60s timeout
 - 71e1c67 fix: speak via BlueALSA BT speaker + volume 5%
 - 9803438 fix: classify specific sound types on energy events
