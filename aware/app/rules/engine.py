@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import logging
 import time
 from typing import Any
@@ -10,6 +11,20 @@ from aware.app.perception.interface import PerceptionSnapshot
 from aware.app.rules.store import RulesStore
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_time_range(raw: Any) -> tuple[int, int] | None:
+    """Safely parse a time_range that might be a string repr of a tuple."""
+    if isinstance(raw, tuple) and len(raw) == 2:
+        return (int(raw[0]), int(raw[1]))
+    if isinstance(raw, str):
+        try:
+            val = ast.literal_eval(raw)
+            if isinstance(val, tuple) and len(val) == 2:
+                return (int(val[0]), int(val[1]))
+        except (ValueError, SyntaxError):
+            pass
+    return None
 
 
 class RulesEngine:
@@ -59,9 +74,9 @@ class RulesEngine:
                     return True
             elif t_type == "time":
                 hour = time.localtime().tm_hour
-                time_range = trigger.get("time_range")
+                time_range = _parse_time_range(trigger.get("time_range"))
                 if time_range:
-                    start, end = eval(time_range) if isinstance(time_range, str) else (0, 24)
+                    start, end = time_range
                     if start <= hour < end:
                         return True
         return False
