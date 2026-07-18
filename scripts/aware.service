@@ -7,7 +7,6 @@ Wants=bluetooth.service
 Type=simple
 User=arduino
 WorkingDirectory=/home/arduino/aware
-ExecStartPre=/home/arduino/aware/scripts/connect-bt.sh
 ExecStart=/home/arduino/aware/.venv/bin/python -m aware.app.main
 Restart=always
 RestartSec=5
