@@ -18,10 +18,30 @@ CREATE TABLE IF NOT EXISTS events (
 );
 """
 
+_CREATE_INDEX = "CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp);"
+
 _INSERT = "INSERT INTO events (timestamp, topic, data) VALUES (?, ?, ?);"
 _SELECT = "SELECT id, timestamp, topic, data FROM events"
 _SELECT_TOPIC = f"{_SELECT} WHERE topic = ? ORDER BY id DESC LIMIT ?;"
 _SELECT_ALL = f"{_SELECT} ORDER BY id DESC LIMIT ?;"
+
+# Timeseries aggregation query
+# Buckets events by time window, returns avg/min/max/count per bucket
+_TIMESERIES = """
+SELECT
+    CAST((timestamp - :start) / :bucket_size AS INTEGER) AS bucket,
+    MIN(timestamp) AS t_start,
+    AVG(CAST(json_extract(data, '$.value') AS REAL)) AS avg_val,
+    MIN(CAST(json_extract(data, '$.value') AS REAL)) AS min_val,
+    MAX(CAST(json_extract(data, '$.value') AS REAL)) AS max_val,
+    COUNT(*) AS count
+FROM events
+WHERE topic = :topic
+  AND timestamp >= :start
+  AND timestamp < :end
+GROUP BY bucket
+ORDER BY bucket;
+"""
 
 
 class EventDB:
@@ -34,6 +54,7 @@ class EventDB:
     async def open(self) -> None:
         self._db = await aiosqlite.connect(self._db_path)
         await self._db.execute(_CREATE_TABLE)
+        await self._db.execute(_CREATE_INDEX)
         await self._db.commit()
 
     async def close(self) -> None:
@@ -63,6 +84,39 @@ class EventDB:
                 "timestamp": row[1],
                 "topic": row[2],
                 "data": json.loads(row[3]),
+            }
+            for row in rows
+        ]
+
+    async def timeseries(
+        self,
+        topic: str,
+        window_seconds: float = 3600,
+        bucket_seconds: float = 60,
+    ) -> list[dict[str, object]]:
+        """Aggregate events into time buckets for charting."""
+        if not self._db:
+            raise RuntimeError("Database not opened")
+        now = time.time()
+        start = now - window_seconds
+        cursor = await self._db.execute(
+            _TIMESERIES,
+            {
+                "topic": topic,
+                "start": start,
+                "end": now,
+                "bucket_size": bucket_seconds,
+            },
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "bucket": row[0],
+                "timestamp": row[1],
+                "avg": round(row[2], 3) if row[2] is not None else 0,
+                "min": round(row[3], 3) if row[3] is not None else 0,
+                "max": round(row[4], 3) if row[4] is not None else 0,
+                "count": row[5],
             }
             for row in rows
         ]

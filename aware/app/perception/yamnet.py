@@ -131,7 +131,7 @@ class YAMNetMic:
             detections=[], sounds=[], source="mic_unavailable", timestamp=time.time()
         )
         self._sound_log: deque[dict[str, object]] = deque(maxlen=200)
-        self._stream: object | None = None
+        self._stream: Any = None
         self._audio_queue: deque[np.ndarray] = deque(maxlen=50)
         self._audio_buffer: list[np.ndarray] = []
 

@@ -1,4 +1,5 @@
 """Real LLM client using llama.cpp server with few-shot prompting."""
+
 from __future__ import annotations
 
 import json
@@ -15,14 +16,14 @@ _SYSTEM_PROMPT = (
     "You are a home automation assistant. Output ONLY valid JSON "
     "with fields: name, when, then, priority.\n\n"
     "Examples:\n"
-    'User: When someone walks in, say welcome\n'
+    "User: When someone walks in, say welcome\n"
     'Output: {"name": "greet_person", "when": "person detected", '
     '"then": "say welcome", "priority": "normal"}\n\n'
-    'User: If glass breaks after 10pm, sound alarm\n'
+    "User: If glass breaks after 10pm, sound alarm\n"
     'Output: {"name": "night_glass_break", '
     '"when": "glass breaking sound and after 10pm", '
     '"then": "sound alarm", "priority": "high"}\n\n'
-    'User: When doorbell rings, flash green\n'
+    "User: When doorbell rings, flash green\n"
     'Output: {"name": "doorbell_alert", '
     '"when": "doorbell sound", '
     '"then": "flash green", "priority": "normal"}'
@@ -128,11 +129,17 @@ class LlamaLLM:
         when_raw = parsed.get("when", user_input)
         then_raw = parsed.get("then", "log event")
         priority_raw = parsed.get("priority", "normal")
+
+        def _coerce(val: object, default: str) -> str:
+            if isinstance(val, (str, list)):
+                return str(val)
+            return default
+
         return RuleSpec(
             name=_slugify(str(parsed.get("name", user_input[:40]))),
-            when=_normalize_value(str(when_raw) if not isinstance(when_raw, (str, list)) else when_raw),
-            then=_normalize_value(str(then_raw) if not isinstance(then_raw, (str, list)) else then_raw),
-            priority=_normalize_value(str(priority_raw) if not isinstance(priority_raw, (str, list)) else priority_raw),
+            when=_normalize_value(_coerce(when_raw, user_input)),
+            then=_normalize_value(_coerce(then_raw, "log event")),
+            priority=_normalize_value(_coerce(priority_raw, "normal")),
         )
 
     async def query_memory(self, question: str, context: str) -> str:

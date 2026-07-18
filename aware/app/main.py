@@ -23,8 +23,8 @@ from aware.app.memory.db import EventDB
 from aware.app.parser.nl_parser import parse_rule
 from aware.app.perception.interface import PerceptionSnapshot, PerceptionSource
 from aware.app.perception.mock_camera import MockCamera
-from aware.app.perception.yolo import YOLOCamera
 from aware.app.perception.yamnet import YAMNetMic
+from aware.app.perception.yolo import YOLOCamera
 from aware.app.rules.engine import RulesEngine
 from aware.app.rules.store import RulesStore
 
@@ -33,7 +33,9 @@ logger = logging.getLogger(__name__)
 MOCK_SNAPSHOT_INTERVAL = 0.5  # seconds
 
 
-async def perception_loop(bus: EventBus, camera: PerceptionSource, mic: YAMNetMic | None = None) -> None:
+async def perception_loop(
+    bus: EventBus, camera: PerceptionSource, mic: YAMNetMic | None = None
+) -> None:
     """Run camera + mic in background, publishing snapshots to event bus."""
     await camera.start()
     # If YOLO camera, run its inference loop in parallel
@@ -86,14 +88,17 @@ def action_handler_factory(db: EventDB, bus: EventBus) -> Any:
         if speak_text:
             msg += f' → "{speak_text}"'
 
-        await db.log("action_executed", {
-            "rule": rule_name,
-            "action": action_type,
-            "params": action_params,
-            "detection_label": det_label,
-            "detection_confidence": det_conf,
-            "message": msg,
-        })
+        await db.log(
+            "action_executed",
+            {
+                "rule": rule_name,
+                "action": action_type,
+                "params": action_params,
+                "detection_label": det_label,
+                "detection_confidence": det_conf,
+                "message": msg,
+            },
+        )
 
     return handle_action
 
@@ -193,13 +198,9 @@ async def get_snapshot() -> dict[str, object]:
         "source": snap.source,
         "timestamp": snap.timestamp,
         "detections": [
-            {"label": d.label, "confidence": d.confidence, "bbox": d.bbox}
-            for d in snap.detections
+            {"label": d.label, "confidence": d.confidence, "bbox": d.bbox} for d in snap.detections
         ],
-        "sounds": [
-            {"label": s.label, "confidence": s.confidence}
-            for s in snap.sounds
-        ],
+        "sounds": [{"label": s.label, "confidence": s.confidence} for s in snap.sounds],
     }
 
 
@@ -216,17 +217,16 @@ async def video_stream() -> StreamingResponse:
             if frame_bytes is None:
                 # Fallback: 1x1 black JPEG
                 frame_bytes = (
-                    b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00'
-                    b'\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t'
-                    b'\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a'
-                    b'\x1f\x1e\x1d\x1a\x1c\x1c $.\' ",#\x1c\x1c(7),01444\x1f\'9=82<.342\xff\xc0'
-                    b'\x00\x0b\x08\x00\x01\x00\x01\x01\x11\x02\xff\xc4\x00\x1f\x00\x00\x01\x05'
-                    b'\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04'
-                    b'\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\x7f\x80'
-                    b'\xff\xd9'
+                    b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+                    b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t"
+                    b"\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a"
+                    b"\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0"
+                    b"\x00\x0b\x08\x00\x01\x00\x01\x01\x11\x02\xff\xc4\x00\x1f\x00\x00\x01\x05"
+                    b"\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04"
+                    b"\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\x7f\x80"
+                    b"\xff\xd9"
                 )
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
             await asyncio.sleep(0.1)  # ~10 FPS
 
     return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
@@ -295,8 +295,7 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
         for t in parsed.triggers
     ]
     actions_dicts: list[dict[str, object]] = [
-        {"type": a.type, "params": a.params}
-        for a in parsed.actions
+        {"type": a.type, "params": a.params} for a in parsed.actions
     ]
     await store.add(
         name=parsed.name,
@@ -308,12 +307,15 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
     )
 
     # 4. Log to memory
-    await db.log("rule_created", {
-        "name": parsed.name,
-        "when": spec.when,
-        "then": spec.then,
-        "priority": parsed.priority,
-    })
+    await db.log(
+        "rule_created",
+        {
+            "name": parsed.name,
+            "when": spec.when,
+            "then": spec.then,
+            "priority": parsed.priority,
+        },
+    )
 
     # 5. Broadcast update
     await bus.publish("rules", {"event": "created", "name": parsed.name})
@@ -326,6 +328,23 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
         priority=parsed.priority,
         message="Rule created and activated.",
     )
+
+
+@app.get("/api/timeseries")
+async def get_timeseries(
+    topic: str = "sensor",
+    window: int = 3600,
+    bucket: int = 60,
+) -> list[dict[str, object]]:
+    """Aggregate events into time buckets for charting.
+
+    Args:
+        topic: Event topic to aggregate (sensor, detection, action_executed, etc.)
+        window: Time window in seconds (default 1 hour)
+        bucket: Bucket size in seconds (default 1 minute)
+    """
+    db: EventDB = app.state.db
+    return await db.timeseries(topic=topic, window_seconds=window, bucket_seconds=bucket)
 
 
 if __name__ == "__main__":

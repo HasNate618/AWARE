@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AWARE Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'SF Mono', 'Fira Code', monospace; background: #0a0a0a; color: #e0e0e0; }
@@ -42,6 +43,12 @@
         .log-bar { flex: 1; min-width: 40px; }
         .log-bar-inner { height: 3px; background: #00ff8844; border-radius: 2px; }
         .log-bar-fill { height: 100%; background: #00ff88; border-radius: 2px; }
+
+        /* Timeseries chart */
+        .chart-wrap { height: 200px; position: relative; }
+        .chart-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+        .chart-tab { background: #1a1a1a; border: 1px solid #333; border-radius: 4px; padding: 4px 12px; color: #888; font-size: 11px; cursor: pointer; font-family: inherit; }
+        .chart-tab.active { background: #00ff8822; border-color: #00ff88; color: #00ff88; }
 
         /* Rules */
         .rule-list { list-style: none; }
@@ -89,6 +96,20 @@
             <ul class="log-list" id="detectionLog">
                 <li class="empty">waiting for detections...</li>
             </ul>
+        </div>
+
+        <!-- Timeseries chart -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <h2>Time Series</h2>
+            <div class="chart-tabs">
+                <button class="chart-tab active" data-topic="sensor">Sensors</button>
+                <button class="chart-tab" data-topic="detection">Objects</button>
+                <button class="chart-tab" data-topic="sound">Sounds</button>
+                <button class="chart-tab" data-topic="action_executed">Rules</button>
+            </div>
+            <div class="chart-wrap">
+                <canvas id="timeseriesChart"></canvas>
+            </div>
         </div>
 
         <!-- Current detections -->
@@ -259,17 +280,120 @@
             this.src = '/api/video?' + Date.now();
         });
 
+        // Timeseries chart
+        let chart = null;
+        let currentTopic = 'sensor';
+
+        function initChart() {
+            const ctx = document.getElementById('timeseriesChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 0 },
+                    scales: {
+                        x: {
+                            ticks: { color: '#555', maxTicksLimit: 10, font: { size: 10 } },
+                            grid: { color: '#1a1a1a' },
+                        },
+                        y: {
+                            ticks: { color: '#555', font: { size: 10 } },
+                            grid: { color: '#1a1a1a' },
+                        },
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#888', font: { size: 10 }, boxWidth: 12 },
+                        },
+                    },
+                },
+            });
+        }
+
+        const COLORS = ['#00ff88', '#ffaa00', '#0088ff', '#ff4444', '#aa66ff', '#ff66aa'];
+
+        async function updateTimeseries() {
+            if (!chart) return;
+            const data = await fetchJSON(`/api/timeseries?topic=${currentTopic}&window=3600&bucket=60`);
+            if (!data || data.length === 0) {
+                chart.data.labels = [];
+                chart.data.datasets = [];
+                chart.update();
+                return;
+            }
+
+            const labels = data.map(d => {
+                const dt = new Date(d.timestamp * 1000);
+                return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            });
+
+            // Group by sensor name if data has it, otherwise just plot avg
+            const datasets = [];
+            if (currentTopic === 'sensor') {
+                // For sensor data, we need to extract individual sensor values
+                // Since we aggregate by topic, plot avg/min/max
+                datasets.push({
+                    label: 'avg',
+                    data: data.map(d => d.avg),
+                    borderColor: COLORS[0],
+                    backgroundColor: COLORS[0] + '22',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0,
+                });
+                datasets.push({
+                    label: 'max',
+                    data: data.map(d => d.max),
+                    borderColor: COLORS[1],
+                    borderDash: [4, 2],
+                    tension: 0.3,
+                    pointRadius: 0,
+                });
+            } else {
+                // For detections/sounds/actions, plot count
+                datasets.push({
+                    label: 'count',
+                    data: data.map(d => d.count),
+                    borderColor: COLORS[0],
+                    backgroundColor: COLORS[0] + '22',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0,
+                });
+            }
+
+            chart.data.labels = labels;
+            chart.data.datasets = datasets;
+            chart.update();
+        }
+
+        // Chart tab switching
+        document.querySelectorAll('.chart-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentTopic = tab.dataset.topic;
+                updateTimeseries();
+            });
+        });
+
+        initChart();
+
         // Poll loops
         setInterval(updateDetections, 500);
         setInterval(updateDetectionLog, 1000);
         setInterval(updateRules, 3000);
         setInterval(updateEvents, 2000);
+        setInterval(updateTimeseries, 5000);
 
         // Initial load
         updateDetections();
         updateDetectionLog();
         updateRules();
         updateEvents();
+        updateTimeseries();
     </script>
 </body>
 </html>
