@@ -208,8 +208,9 @@ This section captures where the project was left off. OpenCode should read this 
 ### Current state
 - **Camera + YOLO detection**: Working. USB2.0 PC CAMERA at /dev/video0. YOLOv8n ONNX. Confidence threshold 0.75.
 - **Mic + sound detection**: Working. USB camera mic via sounddevice (48kHz -> 16kHz resample). Energy spike detection (2x baseline), 2s cooldown. Reports generic "sound" label.
-- **BT speaker**: Paired (TWS Mini Speaker, 15:D2:D2:C5:6B:0C). Connected but PipeWire's bluez5 SPA plugin not creating an audio sink. Built-in audio output works via aplay on hw:1,1.
-- **Speak action**: Implemented in aware/app/action/speaker.py using espeak-ng + aplay. Wired into action handler in main.py (fires on action type "speak").
+- **BT speaker**: Paired (TWS Mini Speaker, 15:D2:D2:C5:6B:0C). Works via BlueALSA (`aplay -D bluealsa`). Volume control: `amixer -D bluealsa sset "TWS Mini Speaker A2DP" 5%`. Auto-connect script at scripts/connect-bt.sh (not yet in service, manual `bluetoothctl connect` for now).
+- **Speak action**: Implemented in aware/app/action/speaker.py using espeak-ng + BlueALSA. Wired into action handler in main.py (fires on action type "speak"). 3s debounce, strips action verb prefix, volume 5%.
+- **Built-in audio**: Broken. Qualcomm SoundWire driver has deferred probe loop (`lpass-tx-swr-active-state`). Use BlueALSA for all audio output.
 - **Rule creation**: Stub LLM parses "when X say Y" correctly. Triggers: detection, sound, time. AND semantics across types.
 - **Dashboard**: Live MJPEG video, detection log with timestamps, rules, activity log, command input.
 - **Systemd service**: aware.service installed, enabled, auto-restarts. Working directory /home/arduino/aware.
