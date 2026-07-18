@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     llm_model_path: str = "models/minicpm5-1b-q8.gguf"
     llm_server_url: str = ""  # e.g. "http://127.0.0.1:8080" for llama.cpp server
     llm_ctx_size: int = 2048
-    llm_timeout: float = 60.0
+    llm_timeout: float = 90.0
     rules_tick_ms: int = 500
     dashboard_dir: str = "dashboard"
     host: str = "0.0.0.0"

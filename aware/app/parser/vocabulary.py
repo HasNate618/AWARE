@@ -72,6 +72,7 @@ ACTIONS: Final[dict[str, dict[str, str]]] = {
     "say": {"type": "speak", "param": "text"},
     "speak": {"type": "speak", "param": "text"},
     "announce": {"type": "speak", "param": "text"},
+    "play": {"type": "speak", "param": "text"},
     "flash": {"type": "led_flash", "param": "color"},
     "turn on": {"type": "led_on", "param": "color"},
     "turn off": {"type": "led_off", "param": ""},

@@ -31,19 +31,28 @@ class ParsedRule:
 
 def parse_when(text: str) -> list[Trigger]:
     triggers: list[Trigger] = []
+    seen: set[tuple[str, str]] = set()
     lower = text.lower()
-    # Split on " and " / " & " for compound conditions
     parts = [p.strip() for p in lower.replace(" & ", " and ").split(" and ")]
     search_text = " ".join(parts)
     for keyword, label in vocab.SOUNDS.items():
         if keyword in search_text:
-            triggers.append(Trigger(type="sound", value=label))
+            key = ("sound", label)
+            if key not in seen:
+                triggers.append(Trigger(type="sound", value=label))
+                seen.add(key)
     for keyword, label in vocab.OBJECTS.items():
         if keyword in search_text:
-            triggers.append(Trigger(type="detection", value=label))
+            key = ("detection", label)
+            if key not in seen:
+                triggers.append(Trigger(type="detection", value=label))
+                seen.add(key)
     for keyword, (start, end) in vocab.TIMES.items():
         if keyword in search_text:
-            triggers.append(Trigger(type="time", value=keyword, time_range=(start, end)))
+            key = ("time", keyword)
+            if key not in seen:
+                triggers.append(Trigger(type="time", value=keyword, time_range=(start, end)))
+                seen.add(key)
     match = vocab.TIME_RE.search(text)
     if match:
         hour = int(match.group(1))
@@ -52,7 +61,9 @@ def parse_when(text: str) -> list[Trigger]:
             hour += 12
         elif ampm == "am" and hour == 12:
             hour = 0
-        triggers.append(Trigger(type="time", value=f"after {hour}:00", time_range=(hour, 24)))
+        key = ("time", f"after {hour}:00")
+        if key not in seen:
+            triggers.append(Trigger(type="time", value=f"after {hour}:00", time_range=(hour, 24)))
     return triggers
 
 
