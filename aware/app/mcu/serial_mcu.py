@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import struct
 import time
@@ -75,19 +76,20 @@ class SerialMCU:
         self._connected = False
         logger.info("Router MCU disconnected")
 
-    def _rpc_call(self, method: str, *args: object) -> object | None:
+    async def _rpc_call(self, method: str, *args: object) -> object | None:
         """Send an RPC request and return the result, or None on error/timeout."""
         if not self._connected or not self._sock:
             return None
         self._msgid += 1
         req = [0, self._msgid, method, list(args)]
+        loop = asyncio.get_running_loop()
         try:
-            self._sock.sendall(_pack_msg(req))
-            header = self._sock.recv(4)
+            await loop.sock_sendall(self._sock, _pack_msg(req))
+            header = await loop.sock_recv(self._sock, 4)
             if not header or len(header) < 4:
                 return None
             (plen,) = struct.unpack(">I", header)
-            data = self._sock.recv(plen)
+            data = await loop.sock_recv(self._sock, plen)
             resp: object = _unpack_msg(header + data)
             if isinstance(resp, list) and len(resp) >= 4:
                 _type: object = resp[0]
@@ -106,13 +108,13 @@ class SerialMCU:
         now = time.time()
         readings: list[SensorReading] = []
 
-        temp = self._rpc_call("read_temp")
+        temp = await self._rpc_call("read_temp")
         if isinstance(temp, (int, float)) and temp > -200:
             readings.append(
                 SensorReading(sensor="temperature_c", value=float(temp), timestamp=now)
             )
 
-        dist_mm = self._rpc_call("read_distance")
+        dist_mm = await self._rpc_call("read_distance")
         if isinstance(dist_mm, (int, float)):
             readings.append(
                 SensorReading(
@@ -122,14 +124,16 @@ class SerialMCU:
                 )
             )
 
-        for axis, name in [("accel_x", "accel_x"), ("accel_y", "accel_y"), ("accel_z", "accel_z")]:
-            val = self._rpc_call(axis)
+        axes = ["accel_x", "accel_y", "accel_z"]
+        tasks = [self._rpc_call(a) for a in axes]
+        vals = await asyncio.gather(*tasks)
+        for name, val in zip(axes, vals, strict=True):
             if isinstance(val, (int, float)):
                 readings.append(
                     SensorReading(sensor=name, value=float(val), timestamp=now)
                 )
 
-        intensity = self._rpc_call("movement_intensity")
+        intensity = await self._rpc_call("movement_intensity")
         if isinstance(intensity, (int, float)):
             readings.append(
                 SensorReading(sensor="movement_intensity", value=float(intensity), timestamp=now)
@@ -140,7 +144,7 @@ class SerialMCU:
         return self._mock.read_all()
 
     async def read_sensor(self, name: str) -> SensorReading | None:
-        result = self._rpc_call("read_sensor", name)
+        result = await self._rpc_call("read_sensor", name)
         if isinstance(result, (int, float)):
             return SensorReading(
                 sensor=name, value=float(result), timestamp=time.time()
@@ -150,13 +154,13 @@ class SerialMCU:
     async def set_led(
         self, index: int, r: int, g: int, b: int, brightness: int = 255
     ) -> None:
-        self._rpc_call("set_led", index, r, g, b, brightness)
+        await self._rpc_call("set_led", index, r, g, b, brightness)
 
     async def play_tone(self, frequency: int, duration_ms: int) -> None:
-        self._rpc_call("play_tone", frequency, duration_ms)
+        await self._rpc_call("play_tone", frequency, duration_ms)
 
     async def set_relay(self, index: int, state: bool) -> None:
-        self._rpc_call("set_relay", index, state)
+        await self._rpc_call("set_relay", index, state)
 
 
 class _MockProvider:

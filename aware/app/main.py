@@ -67,17 +67,31 @@ async def perception_loop(
     if mic is not None:
         await mic.start()
         asyncio.create_task(mic.run_detection_loop())
+
+    _prev_det_labels: set[str] = set()
+    _prev_sound_labels: set[str] = set()
+
     try:
         while True:
             # Merge camera + mic snapshots
             cam_snap = await camera.snapshot()
             sounds_snap = await mic.snapshot() if mic else None
+
+            curr_det_labels = {d.label for d in cam_snap.detections}
+            curr_sound_labels = {s.label for s in sounds_snap.sounds} if sounds_snap else set()
+
             merged = PerceptionSnapshot(
                 detections=cam_snap.detections,
                 sounds=sounds_snap.sounds if sounds_snap else [],
+                entered=list(curr_det_labels - _prev_det_labels),
+                exited=list(_prev_det_labels - curr_det_labels),
                 source=cam_snap.source,
                 timestamp=cam_snap.timestamp,
             )
+
+            _prev_det_labels = curr_det_labels
+            _prev_sound_labels = curr_sound_labels
+
             await bus.publish("perception", {"snapshot": merged})
             await asyncio.sleep(MOCK_SNAPSHOT_INTERVAL)
     except asyncio.CancelledError:
@@ -86,7 +100,7 @@ async def perception_loop(
             await mic.stop()
 
 
-SENSOR_READ_INTERVAL = 2.0  # seconds
+SENSOR_READ_INTERVAL = 0.5  # seconds
 
 
 async def sensor_loop(sensors: SensorBus, bus: EventBus, db: EventDB) -> None:
@@ -365,6 +379,9 @@ class CommandResponse(BaseModel):
     then: str
     priority: str
     message: str
+    llm_output: str = ""
+    triggers: list[dict[str, object]] = []
+    actions: list[dict[str, object]] = []
 
 
 @app.post("/api/command", response_model=CommandResponse)
@@ -387,6 +404,7 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
             "type": t.type,
             "value": t.value,
             "time_range": list(t.time_range) if t.time_range else None,
+            "transition": t.transition,
         }
         for t in parsed.triggers
     ]
@@ -400,6 +418,7 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
         priority=parsed.priority,
         triggers=triggers_dicts,
         actions=actions_dicts,
+        llm_raw=spec.raw,
     )
 
     # 4. Log to memory
@@ -410,6 +429,9 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
             "when": spec.when,
             "then": spec.then,
             "priority": parsed.priority,
+            "llm_output": spec.raw,
+            "triggers": triggers_dicts,
+            "actions": actions_dicts,
         },
     )
 
@@ -423,6 +445,9 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
         then=spec.then,
         priority=parsed.priority,
         message="Rule created and activated.",
+        llm_output=spec.raw,
+        triggers=triggers_dicts,
+        actions=actions_dicts,
     )
 
 
