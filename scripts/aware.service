@@ -1,0 +1,15 @@
+[Unit]
+Description=AWARE - Autonomous Witness And Response Engine
+After=network.target
+
+[Service]
+Type=simple
+User=arduino
+WorkingDirectory=/home/arduino/aware
+ExecStart=/home/arduino/aware/.venv/bin/python -m aware.app.main
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

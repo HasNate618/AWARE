@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections import deque
 
 import numpy as np
 
@@ -92,9 +93,11 @@ class YOLOCamera:
         self._running = False
         self._cap: object | None = None
         self._session: object | None = None
+        self._last_frame: np.ndarray | None = None
         self._last_snapshot: PerceptionSnapshot = PerceptionSnapshot(
             detections=[], sounds=[], source="yolo_unavailable", timestamp=time.time()
         )
+        self._detection_log: deque[dict[str, object]] = deque(maxlen=200)
 
     async def start(self) -> None:
         self._running = True
@@ -149,6 +152,39 @@ class YOLOCamera:
     async def snapshot(self) -> PerceptionSnapshot:
         return self._last_snapshot
 
+    def get_frame_jpeg(self) -> bytes | None:
+        """Return latest frame as JPEG with YOLO bounding boxes drawn, or None."""
+        if self._last_frame is None:
+            return None
+        try:
+            import cv2
+
+            frame = self._last_frame.copy()
+            snap = self._last_snapshot
+            h, w = frame.shape[:2]
+
+            for det in snap.detections:
+                x1, y1, x2, y2 = det.bbox
+                # Draw box
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 136), 2)
+                # Label
+                label = f"{det.label} {det.confidence:.0%}"
+                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                cv2.rectangle(frame, (x1, y1 - th - 8), (x1 + tw + 4, y1), (0, 255, 136), -1)
+                cv2.putText(frame, label, (x1 + 2, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
+            # Encode to JPEG
+            _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            return buf.tobytes()
+        except Exception:
+            logger.exception("Failed to encode frame")
+            return None
+
+    def get_detection_log(self, limit: int = 50) -> list[dict[str, object]]:
+        """Return recent detections with timestamps."""
+        items = list(self._detection_log)
+        return items[-limit:]
+
     async def run_inference_loop(self) -> None:
         """Background loop: capture frame, run YOLO, store snapshot."""
         while self._running:
@@ -158,6 +194,15 @@ class YOLOCamera:
             try:
                 snapshot = await asyncio.to_thread(self._infer)
                 self._last_snapshot = snapshot
+                # Log detections with timestamps
+                if snapshot.detections:
+                    for det in snapshot.detections:
+                        self._detection_log.append({
+                            "label": det.label,
+                            "confidence": det.confidence,
+                            "bbox": det.bbox,
+                            "timestamp": snapshot.timestamp,
+                        })
             except Exception:
                 logger.exception("YOLO inference error")
             await asyncio.sleep(self.inference_interval)
@@ -173,6 +218,8 @@ class YOLOCamera:
             return PerceptionSnapshot(
                 detections=[], sounds=[], source="yolo", timestamp=time.time()
             )
+
+        self._last_frame = frame
 
         # Preprocess: resize, BGR→RGB, normalize, NCHW
         img = cv2.resize(frame, (320, 320))

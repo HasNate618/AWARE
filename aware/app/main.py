@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -44,19 +46,38 @@ async def perception_loop(bus: EventBus, camera: PerceptionSource) -> None:
         await camera.stop()
 
 
-def action_handler_factory(db: EventDB) -> Any:
-    """Create a handler that logs actions to the database."""
+def action_handler_factory(db: EventDB, bus: EventBus) -> Any:
+    """Create a handler that logs actions with detection context to the database."""
 
     async def handle_action(event: dict[str, Any]) -> None:
         rule_name = event.get("rule", "unknown")
         action_type = event.get("action", "log")
         params = event.get("params", {})
+        detection = event.get("detection", {})
+        action_params = params.get("params", {})
         logger.info(
-            "[action] rule=%s action=%s params=%s",
+            "[action] rule=%s action=%s detection=%s",
             rule_name,
             action_type,
-            params,
+            detection.get("label", "none"),
         )
+
+        # Build descriptive message
+        det_label = detection.get("label", "unknown")
+        det_conf = detection.get("confidence", 0)
+        speak_text = action_params.get("text", "")
+        msg = f"Rule '{rule_name}' triggered by {det_label} ({det_conf:.0%}). Action: {action_type}"
+        if speak_text:
+            msg += f' → "{speak_text}"'
+
+        await db.log("action_executed", {
+            "rule": rule_name,
+            "action": action_type,
+            "params": action_params,
+            "detection_label": det_label,
+            "detection_confidence": det_conf,
+            "message": msg,
+        })
 
     return handle_action
 
@@ -98,7 +119,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     await store.open()
     await engine.start()
 
-    bus.subscribe("action", action_handler_factory(db))
+    bus.subscribe("action", action_handler_factory(db, bus))
 
     app.state.bus = bus
     app.state.db = db
@@ -156,6 +177,44 @@ async def get_snapshot() -> dict[str, object]:
             for s in snap.sounds
         ],
     }
+
+
+@app.get("/api/video")
+async def video_stream():
+    """MJPEG stream with YOLO bounding boxes overlaid."""
+    camera = app.state.camera
+
+    async def generate():
+        while True:
+            frame_bytes = None
+            if isinstance(camera, YOLOCamera):
+                frame_bytes = camera.get_frame_jpeg()
+            if frame_bytes is None:
+                # Fallback: 1x1 black JPEG
+                frame_bytes = (
+                    b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00'
+                    b'\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t'
+                    b'\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a'
+                    b'\x1f\x1e\x1d\x1a\x1c\x1c $.\' ",#\x1c\x1c(7),01444\x1f\'9=82<.342\xff\xc0'
+                    b'\x00\x0b\x08\x00\x01\x00\x01\x01\x11\x02\xff\xc4\x00\x1f\x00\x00\x01\x05'
+                    b'\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04'
+                    b'\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\x7f\x80'
+                    b'\xff\xd9'
+                )
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            await asyncio.sleep(0.1)  # ~10 FPS
+
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/api/detections")
+async def get_detections(limit: int = 50) -> list[dict[str, object]]:
+    """Get recent detection history with timestamps."""
+    camera = app.state.camera
+    if isinstance(camera, YOLOCamera):
+        return camera.get_detection_log(limit)
+    return []
 
 
 @app.get("/events")

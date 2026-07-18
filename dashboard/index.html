@@ -12,36 +12,57 @@
         .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #00ff88; animation: pulse 2s infinite; }
         .status-dot.offline { background: #ff4444; animation: none; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; max-width: 1200px; margin: 0 auto; }
-        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
         .card { background: #111; border: 1px solid #333; border-radius: 8px; padding: 16px; }
         .card h2 { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
-        .detection-list { list-style: none; }
-        .detection-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #222; }
+        .empty { color: #555; font-style: italic; font-size: 13px; }
+
+        /* Video feed */
+        .video-wrap { position: relative; background: #000; border-radius: 4px; overflow: hidden; aspect-ratio: 4/3; }
+        .video-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .video-badge { position: absolute; top: 8px; left: 8px; background: #00ff8822; color: #00ff88; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+        .video-badge.offline { background: #ff444422; color: #ff4444; }
+
+        /* Detection list */
+        .detection-list { list-style: none; max-height: 200px; overflow-y: auto; }
+        .detection-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #222; font-size: 13px; }
         .detection-item:last-child { border-bottom: none; }
         .detection-label { color: #00ff88; font-weight: 600; }
-        .detection-conf { color: #888; font-size: 12px; }
-        .confidence-bar { width: 60px; height: 4px; background: #222; border-radius: 2px; overflow: hidden; margin-left: 8px; display: inline-block; vertical-align: middle; }
-        .confidence-fill { height: 100%; background: #00ff88; border-radius: 2px; transition: width 0.3s; }
-        .empty { color: #555; font-style: italic; font-size: 13px; }
-        .event-list { list-style: none; max-height: 300px; overflow-y: auto; }
-        .event-item { padding: 6px 0; border-bottom: 1px solid #1a1a1a; font-size: 12px; }
-        .event-time { color: #555; margin-right: 8px; }
-        .event-topic { color: #00ff88; margin-right: 8px; }
+        .confidence-bar { width: 50px; height: 4px; background: #222; border-radius: 2px; overflow: hidden; margin-left: 8px; display: inline-block; vertical-align: middle; }
+        .confidence-fill { height: 100%; background: #00ff88; border-radius: 2px; }
+
+        /* Detection log */
+        .log-list { list-style: none; max-height: 400px; overflow-y: auto; font-size: 12px; }
+        .log-item { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #1a1a1a; align-items: baseline; }
+        .log-time { color: #555; flex-shrink: 0; width: 80px; }
+        .log-label { color: #00ff88; font-weight: 600; flex-shrink: 0; width: 100px; }
+        .log-conf { color: #888; flex-shrink: 0; width: 45px; text-align: right; }
+        .log-bar { flex: 1; min-width: 40px; }
+        .log-bar-inner { height: 3px; background: #00ff8844; border-radius: 2px; }
+        .log-bar-fill { height: 100%; background: #00ff88; border-radius: 2px; }
+
+        /* Rules */
+        .rule-list { list-style: none; }
+        .rule-item { padding: 8px 0; border-bottom: 1px solid #222; }
+        .rule-name { color: #00ff88; font-weight: 600; font-size: 13px; }
+        .rule-when { color: #888; font-size: 12px; }
+        .rule-then { color: #aaa; font-size: 12px; }
         .command-form { display: flex; gap: 8px; margin-top: 12px; }
         .command-input { flex: 1; background: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 8px 12px; color: #e0e0e0; font-family: inherit; font-size: 13px; }
         .command-input:focus { outline: none; border-color: #00ff88; }
         .command-btn { background: #00ff88; color: #0a0a0a; border: none; border-radius: 4px; padding: 8px 16px; font-family: inherit; font-weight: 600; cursor: pointer; }
         .command-btn:hover { background: #00cc6a; }
-        .rule-list { list-style: none; }
-        .rule-item { padding: 8px 0; border-bottom: 1px solid #222; }
-        .rule-name { color: #00ff88; font-weight: 600; }
-        .rule-when { color: #888; font-size: 12px; }
-        .rule-then { color: #aaa; font-size: 12px; }
-        .camera-status { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-        .camera-badge { background: #00ff8822; color: #00ff88; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
-        .camera-badge.offline { background: #ff444422; color: #ff4444; }
-        .sound-item { color: #ffaa00; }
+
+        /* Events */
+        .event-list { list-style: none; max-height: 300px; overflow-y: auto; }
+        .event-item { padding: 6px 0; border-bottom: 1px solid #1a1a1a; font-size: 12px; }
+        .event-time { color: #555; margin-right: 8px; }
+        .event-topic { padding: 1px 6px; border-radius: 3px; font-size: 11px; margin-right: 8px; }
+        .event-topic.action { background: #ff880022; color: #ffaa00; }
+        .event-topic.rule { background: #00ff8822; color: #00ff88; }
+        .event-topic.perception { background: #0088ff22; color: #0088ff; }
+        .event-msg { color: #ccc; }
     </style>
 </head>
 <body>
@@ -52,17 +73,32 @@
     </div>
 
     <div class="grid">
-        <div class="card">
-            <h2>Detections</h2>
-            <div class="camera-status">
-                <span class="camera-badge" id="cameraBadge">--</span>
-                <span style="color: #555; font-size: 11px;" id="snapshotTime">--</span>
+        <!-- Video feed -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <h2>Camera</h2>
+            <div class="video-wrap">
+                <img id="videoFeed" src="/api/video" alt="Camera feed">
+                <div class="video-badge" id="cameraBadge">connecting...</div>
             </div>
-            <ul class="detection-list" id="detectionList">
-                <li class="empty">waiting for camera...</li>
+        </div>
+
+        <!-- Detection log -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <h2>Detection Log</h2>
+            <ul class="log-list" id="detectionLog">
+                <li class="empty">waiting for detections...</li>
             </ul>
         </div>
 
+        <!-- Current detections -->
+        <div class="card">
+            <h2>Live Detections</h2>
+            <ul class="detection-list" id="detectionList">
+                <li class="empty">nothing detected</li>
+            </ul>
+        </div>
+
+        <!-- Rules -->
         <div class="card">
             <h2>Rules</h2>
             <ul class="rule-list" id="ruleList">
@@ -75,8 +111,9 @@
             </div>
         </div>
 
+        <!-- Events -->
         <div class="card" style="grid-column: 1 / -1;">
-            <h2>Events</h2>
+            <h2>Activity Log</h2>
             <ul class="event-list" id="eventList">
                 <li class="empty">no events yet</li>
             </ul>
@@ -85,7 +122,6 @@
 
     <script>
         const API = window.location.origin;
-        let connected = false;
 
         async function fetchJSON(path) {
             try {
@@ -98,14 +134,8 @@
         }
 
         function setConnected(ok) {
-            connected = ok;
             document.getElementById('statusDot').className = 'status-dot' + (ok ? '' : ' offline');
             document.getElementById('statusText').textContent = ok ? 'connected' : 'disconnected';
-        }
-
-        function confBar(conf) {
-            const pct = Math.round(conf * 100);
-            return `<span class="confidence-bar"><span class="confidence-fill" style="width:${pct}%"></span></span><span class="confidence-conf">${pct}%</span>`;
         }
 
         function timeStr(ts) {
@@ -113,6 +143,9 @@
             return new Date(ts * 1000).toLocaleTimeString();
         }
 
+        function confPct(conf) { return Math.round(conf * 100); }
+
+        // Live detections (current frame)
         async function updateDetections() {
             const data = await fetchJSON('/api/snapshot');
             if (!data) { setConnected(false); return; }
@@ -120,8 +153,7 @@
 
             const badge = document.getElementById('cameraBadge');
             badge.textContent = data.source;
-            badge.className = 'camera-badge' + (data.source.includes('unavailable') || data.source === 'mock_camera' ? ' offline' : '');
-            document.getElementById('snapshotTime').textContent = timeStr(data.timestamp);
+            badge.className = 'video-badge' + (data.source.includes('unavailable') || data.source === 'mock_camera' ? ' offline' : '');
 
             const list = document.getElementById('detectionList');
             const all = [...(data.detections || []), ...(data.sounds || []).map(s => ({...s, _sound: true}))];
@@ -129,14 +161,33 @@
                 list.innerHTML = '<li class="empty">nothing detected</li>';
                 return;
             }
-            list.innerHTML = all.map(d =>
-                `<li class="detection-item${d._sound ? ' sound-item' : ''}">
+            list.innerHTML = all.map(d => {
+                const pct = confPct(d.confidence);
+                return `<li class="detection-item${d._sound ? ' sound-item' : ''}">
                     <span class="detection-label">${d.label}</span>
-                    ${confBar(d.confidence)}
-                </li>`
-            ).join('');
+                    <span class="confidence-bar"><span class="confidence-fill" style="width:${pct}%"></span></span>
+                    <span style="color:#888;font-size:12px;margin-left:6px">${pct}%</span>
+                </li>`;
+            }).join('');
         }
 
+        // Detection history log
+        async function updateDetectionLog() {
+            const data = await fetchJSON('/api/detections?limit=50');
+            if (!data || data.length === 0) return;
+            const list = document.getElementById('detectionLog');
+            list.innerHTML = data.reverse().map(d => {
+                const pct = confPct(d.confidence);
+                return `<li class="log-item">
+                    <span class="log-time">${timeStr(d.timestamp)}</span>
+                    <span class="log-label">${d.label}</span>
+                    <span class="log-conf">${pct}%</span>
+                    <span class="log-bar"><span class="log-bar-inner"><span class="log-bar-fill" style="width:${pct}%"></span></span></span>
+                </li>`;
+            }).join('');
+        }
+
+        // Rules
         async function updateRules() {
             const data = await fetchJSON('/rules');
             if (!data) return;
@@ -154,23 +205,29 @@
             ).join('');
         }
 
+        // Activity log with descriptive messages
         async function updateEvents() {
-            const data = await fetchJSON('/events?limit=20');
+            const data = await fetchJSON('/events?limit=30');
             if (!data) return;
             const list = document.getElementById('eventList');
             if (data.length === 0) {
                 list.innerHTML = '<li class="empty">no events yet</li>';
                 return;
             }
-            list.innerHTML = data.reverse().map(e =>
-                `<li class="event-item">
+            list.innerHTML = data.reverse().map(e => {
+                const d = e.data || {};
+                const topicClass = e.topic === 'action_executed' ? 'action' :
+                                   e.topic === 'rule_created' ? 'rule' : 'perception';
+                const msg = d.message || d.name || JSON.stringify(d);
+                return `<li class="event-item">
                     <span class="event-time">${new Date(e.timestamp * 1000).toLocaleTimeString()}</span>
-                    <span class="event-topic">${e.topic}</span>
-                    ${e.name || e.rule || ''}
-                </li>`
-            ).join('');
+                    <span class="event-topic ${topicClass}">${e.topic.replace('_', ' ')}</span>
+                    <span class="event-msg">${msg}</span>
+                </li>`;
+            }).join('');
         }
 
+        // Create rule
         async function createRule() {
             const input = document.getElementById('commandInput');
             const cmd = input.value.trim();
@@ -184,11 +241,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ command: cmd })
                 });
-                if (r.ok) {
-                    input.value = '';
-                    updateRules();
-                    updateEvents();
-                }
+                if (r.ok) { input.value = ''; updateRules(); updateEvents(); }
             } catch (e) {}
             btn.textContent = 'Create';
             btn.disabled = false;
@@ -199,13 +252,20 @@
             if (e.key === 'Enter') createRule();
         });
 
+        // Video feed error handling
+        document.getElementById('videoFeed').addEventListener('error', function() {
+            this.src = '/api/video?' + Date.now();
+        });
+
         // Poll loops
         setInterval(updateDetections, 500);
+        setInterval(updateDetectionLog, 1000);
         setInterval(updateRules, 3000);
         setInterval(updateEvents, 2000);
 
         // Initial load
         updateDetections();
+        updateDetectionLog();
         updateRules();
         updateEvents();
     </script>
