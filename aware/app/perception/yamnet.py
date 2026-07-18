@@ -229,7 +229,7 @@ class YAMNetMic:
                         })
                         logger.info("[sound] %s (%.0f%%)", snd.label, snd.confidence * 100)
                 elif cycle % 20 == 0:
-                    logger.debug("[sound] queue=%d no detections", queue_len)
+                    logger.info("[sound] queue=%d no detections", queue_len)
             except Exception:
                 logger.exception("Sound detection error")
             await asyncio.sleep(self.detection_interval)
@@ -280,7 +280,7 @@ class YAMNetMic:
         if classified:
             logger.info("[sound] rms=%.5f detected=%s", rms_val, classified)
         elif rms_val > 0.0005:
-            logger.debug("[sound] rms=%.5f (below threshold %.5f)", rms_val, self.energy_threshold)
+            logger.info("[sound] rms=%.5f (below threshold %.5f)", rms_val, self.energy_threshold)
 
         sounds = [
             Detection(label=label, confidence=conf)
