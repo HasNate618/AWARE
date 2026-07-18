@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import logging
 import time
 from collections import deque
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -12,13 +14,83 @@ from aware.app.perception.interface import Detection, PerceptionSnapshot
 
 logger = logging.getLogger(__name__)
 
+# YAMNet class indices → AWARE vocabulary labels
+_YAMNET_MAP: dict[int, str] = {
+    0: "speech",
+    6: "speech",     # Shout
+    19: "crying",
+    20: "baby_cry",
+    69: "dog",
+    70: "dog_bark",
+    195: "doorbell",
+    196: "doorbell",  # Church bell
+    198: "doorbell",  # Bicycle bell
+    292: "fire",
+    304: "alarm",     # Car alarm
+    317: "siren",     # Police siren
+    318: "siren",     # Ambulance
+    319: "siren",     # Fire truck
+    344: "knock",     # Engine knocking
+    349: "doorbell",
+    353: "knock",
+    382: "alarm",
+    384: "doorbell",  # Telephone bell
+    389: "alarm",     # Alarm clock
+    390: "siren",
+    392: "alarm",     # Buzzer
+    393: "alarm",     # Smoke detector
+    394: "alarm",     # Fire alarm
+    420: "alarm",     # Explosion
+    421: "alarm",     # Gunshot
+    435: "glass_break",
+}
+
+
+def _load_yamnet(model_path: str, class_map_path: str) -> Any:
+    """Load YAMNet ONNX model. Returns session or None on failure."""
+    try:
+        import onnxruntime as ort
+
+        sess = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        # Load class map for display names
+        class_names: dict[int, str] = {}
+        p = Path(class_map_path)
+        if p.exists():
+            with open(p) as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    class_names[int(row["index"])] = row["display_name"]
+        logger.info("YAMNet loaded: %s (%d classes)", model_path, len(class_names))
+        return sess, class_names
+    except Exception:
+        logger.exception("Failed to load YAMNet from %s", model_path)
+        return None
+
+
+def _classify_yamnet(
+    audio: np.ndarray, session: Any, class_names: dict[int, str]
+) -> tuple[str, float]:
+    """Run YAMNet inference and return (label, confidence)."""
+    try:
+        inp = session.get_inputs()[0]
+        scores = session.run(None, {inp.name: audio})[0][0]
+        top_idx = int(scores.argmax())
+        top_score = float(scores[top_idx])
+
+        # Map to AWARE vocabulary, fall back to YAMNet display name
+        label = _YAMNET_MAP.get(top_idx, class_names.get(top_idx, "sound"))
+        return (label, round(top_score, 3))
+    except Exception:
+        logger.debug("YAMNet inference failed", exc_info=True)
+        return ("sound", 0.5)
+
 
 def _rms(audio: np.ndarray) -> float:
     return float(np.sqrt(np.mean(audio.astype(np.float64) ** 2)))
 
 
-def _classify_event(audio: np.ndarray, sr: int) -> tuple[str, float]:
-    """Classify an audio event into a specific sound type with confidence."""
+def _classify_fft(audio: np.ndarray, sr: int) -> tuple[str, float]:
+    """Fallback: FFT-based sound classification."""
     fft = np.abs(np.fft.rfft(audio))
     freqs = np.fft.rfftfreq(len(audio), 1.0 / sr)
 
@@ -26,45 +98,32 @@ def _classify_event(audio: np.ndarray, sr: int) -> tuple[str, float]:
     fft_f = fft[mask]
     freqs_f = freqs[mask]
 
-    total_energy = np.sum(fft_f ** 2)
+    total_energy = np.sum(fft_f**2)
     if total_energy < 1e-10:
         return ("sound", 0.5)
 
-    # Peak analysis
     peak_idx = fft_f.argmax()
     peak_freq = freqs_f[peak_idx]
     peak_energy = fft_f[peak_idx] ** 2
     peak_ratio = peak_energy / total_energy if total_energy > 0 else 0
 
-    # Energy in frequency bands
     def band_ratio(fmin: float, fmax: float) -> float:
         band = (freqs_f >= fmin) & (freqs_f <= fmax)
         return float(np.sum(fft_f[band] ** 2) / total_energy) if total_energy > 0 else 0.0
 
-    low_energy = band_ratio(100, 400)        # thump/knock
-    mid_energy = band_ratio(400, 2000)       # speech/doorbell
-    _ = band_ratio(2000, 8000)               # glass/shatter
-    broad_energy = band_ratio(100, 8000)     # broad spectrum
+    low_energy = band_ratio(100, 400)
+    mid_energy = band_ratio(400, 2000)
+    broad_energy = band_ratio(100, 8000)
 
-    # High frequency spike → glass break
     if peak_freq > 2000 and peak_ratio > 0.3:
         return ("glass_break", round(min(0.5 + peak_ratio * 0.5, 0.95), 3))
-
-    # Low frequency thump → knock
     if peak_freq < 400 and low_energy > 0.4 and peak_ratio > 0.15:
         return ("knock", round(min(0.5 + peak_ratio, 0.9), 3))
-
-    # Mid frequency concentrated → doorbell
     if 600 < peak_freq < 2500 and mid_energy > 0.5 and peak_ratio > 0.2:
         return ("doorbell", round(min(0.5 + peak_ratio * 0.8, 0.9), 3))
-
-    # Steady mid frequency → alarm/siren
     if 500 < peak_freq < 3000 and peak_ratio > 0.25:
         return ("alarm", round(min(0.5 + peak_ratio * 0.5, 0.9), 3))
-
-    # Harmonic structure → speech/music
     if 200 < peak_freq < 3000:
-        # Look for harmonics: peaks at multiples of fundamental
         harmonics = 0
         for h in range(2, 6):
             h_idx = np.argmin(np.abs(freqs_f - peak_freq * h))
@@ -73,7 +132,6 @@ def _classify_event(audio: np.ndarray, sr: int) -> tuple[str, float]:
         if harmonics >= 2 and mid_energy > 0.3:
             return ("speech", round(min(0.4 + harmonics * 0.15, 0.9), 3))
 
-    # Generic sound
     conf = min(0.3 + broad_energy * 0.5, 0.8)
     return ("sound", round(conf, 3))
 
@@ -84,17 +142,21 @@ class YAMNetMic:
     def __init__(
         self,
         device: int | str | None = None,
-        sample_rate: int = 0,  # 0 = auto-detect native rate
+        sample_rate: int = 0,
         chunk_duration: float = 0.975,
         energy_threshold: float = 0.001,
         detection_interval: float = 0.25,
+        model_path: str = "models/yamnet.onnx",
+        class_map_path: str = "models/yamnet_class_map.csv",
     ) -> None:
         self.device = device
         self.target_rate = 16000
-        self.device_rate = 0  # set during start()
+        self.device_rate = 0
         self.chunk_duration = chunk_duration
         self.energy_threshold = energy_threshold
         self.detection_interval = detection_interval
+        self.model_path = model_path
+        self.class_map_path = class_map_path
         self._running = False
         self._last_snapshot: PerceptionSnapshot = PerceptionSnapshot(
             detections=[], sounds=[], source="mic_unavailable", timestamp=time.time()
@@ -106,13 +168,32 @@ class YAMNetMic:
         self._baseline_rms: float = 0.0
         self._last_event_time: float = 0.0
         self._event_cooldown: float = 2.0
+        self._yamnet: Any = None
+        self._class_names: dict[int, str] = {}
+
+    def _resolve_model_path(self, relative: str) -> str:
+        p = Path(relative)
+        if p.exists():
+            return str(p)
+        project_root = Path(__file__).parent.parent.parent.parent
+        return str(project_root / relative)
 
     async def start(self) -> None:
         self._running = True
+
+        # Load YAMNet model (non-fatal if missing/corrupt)
+        model_file = self._resolve_model_path(self.model_path)
+        class_map_file = self._resolve_model_path(self.class_map_path)
+        result = _load_yamnet(model_file, class_map_file)
+        if result is not None:
+            self._yamnet, self._class_names = result
+            logger.info("YAMNet enabled — %d mapped classes", len(_YAMNET_MAP))
+        else:
+            logger.warning("YAMNet unavailable — falling back to FFT classifier")
+
         try:
             import sounddevice as sd
 
-            # Find USB mic
             if self.device is None:
                 devices = sd.query_devices()
                 for i, d in enumerate(devices):
@@ -148,9 +229,6 @@ class YAMNetMic:
             if self.device_rate <= 0:
                 self.device_rate = 48000
 
-            # PortAudio requires exact native rate — always use device_rate
-
-            # Start audio stream in a thread
             def audio_callback(indata: Any, frames: int, time_info: Any, status: Any) -> None:
                 if status:
                     logger.warning("Audio status: %s", status)
@@ -264,7 +342,11 @@ class YAMNetMic:
 
         if ratio > 2.0 and cooldown_ok:
             self._last_event_time = now
-            label, conf = _classify_event(audio, self.target_rate)
+            # YAMNet if available, else FFT
+            if self._yamnet is not None:
+                label, conf = _classify_yamnet(audio, self._yamnet, self._class_names)
+            else:
+                label, conf = _classify_fft(audio, self.target_rate)
             sound = Detection(label=label, confidence=conf)
             self._sound_log.append({
                 "label": label,
