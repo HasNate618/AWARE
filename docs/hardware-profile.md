@@ -12,14 +12,17 @@
 ## Current Utilization (board live, 22:00 UTC)
 
 ```
-CPU load: 3.80/4.00 (96% saturated)
-  AWARE main process (YOLO + audio + web + rules):  184% CPU
-  uvicorn reloader (AWARE_UVICORN_RELOAD=1):         64% CPU
-  llama.cpp server (MiniCPM5-1B Q4_K_M):              9% CPU (idle)
-  arduino-router (STM32 bridge):                       0.2% CPU
-GPU: 0% utilization
+CPU load: 2.98/4.00 (75% utilized, 56% idle)
+  AWARE main process (YOLO + audio + web + rules): 164% CPU
+  llama.cpp server (MiniCPM5-1B Q4_K_M):            8.5% CPU (idle)
+  arduino-router (STM32 bridge):                      0.2% CPU
+GPU: 0% utilization (Adreno 702 available via OpenCL)
 MCU: sensor polling at 2Hz via arduino-router msgpack RPC
 ```
+
+Before fix (AWARE_UVICORN_RELOAD=true):
+  CPU load: 3.80/4.00 (96% saturated), 1.9% idle
+  AWARE reloader: 64% CPU (full core wasted on file watching)
 
 ## Service → Hardware Distribution
 
@@ -80,12 +83,12 @@ STM32U585 — Realtime MCU
 
 ## Key Bottlenecks
 
-| Issue | Impact | Fix |
-|---|---|---|
-| uvicorn reloader | -64% CPU (full core) | `AWARE_UVICORN_RELOAD=false` in systemd env |
-| YOLO on CPU | ~70-80% CPU | ONNX OpenCL EP → Adreno 702 |
-| MJPEG at 10FPS | ~40-50% CPU | Reduce to 5FPS, or offload encode to GPU |
-| All services on 1 process | No isolation, one crash kills all | Run llama.cpp as dedicated systemd service (already done) |
+| Issue | Status | Impact | Fix |
+|---|---|---|---|
+| uvicorn reloader | ✅ Fixed | Freed 64% CPU | `AWARE_UVICORN_RELOAD=false` |
+| YOLO on CPU | Open | ~70-80% CPU | ONNX OpenCL EP → Adreno 702 |
+| MJPEG at 10FPS | Open | ~40-50% CPU | Reduce to 5FPS, or GPU encode |
+| llama.cpp isolation | ✅ Done | Independent process | systemd service
 
 ## OpenCL GPU Details
 
@@ -123,3 +126,46 @@ Methods:
 
 Mock fallback (`_MockProvider`) returns jittered defaults when STM32
 methods are not registered or connection fails.
+
+## Qualcomm Track Alignment
+
+### 1. DragonWing CPU (MPU)
+The QRB2210 runs all AI/ML inference, the web server, and the rules engine.
+No cloud services. The quad Cortex-A53 handles YOLO object detection (ONNX Runtime),
+MiniCPM5-1B LLM inference (llama.cpp server), audio classification (NumPy FFT),
+and the FastAPI dashboard — all simultaneously on-device.
+
+### 2. DragonWing GPU (Adreno 702)
+The Adreno 702 is detected via rusticl OpenCL 3.0. Currently unused.
+ONNX Runtime supports OpenCLExecutionProvider — YOLO inference could be
+offloaded to the GPU (FP16 + integer dot product support, unified memory).
+This is future work; the current CPU-only implementation is functional.
+
+### 3. On-device AI
+Three AI models run locally with zero cloud dependency:
+- YOLOv8n (ONNX, 3.2M params) — real-time object detection at 2Hz
+- MiniCPM5-1B (GGUF Q4_K_M) — natural language rule generation via llama.cpp
+- Custom audio classifier — FFT-based sound event detection (doorbell, glass break, speech)
+All models are quantized for edge deployment on 4GB RAM.
+
+### 4. MCU, Realtime
+The STM32U585 reads Modulino sensors (temperature, distance, accelerometer)
+at 2Hz via arduino-router msgpack RPC over Unix socket. The MCU protocol
+supports LED control, tone generation, and relay switching — enabling
+actuator actions without MPU involvement. The `arduino-router` daemon
+bridges the STM32 UART (/dev/ttyHS1) to the MPU via a local socket.
+
+### 5. Specialty
+AWARE is an autonomous agent that perceives its environment through camera,
+microphone, and physical sensors, reasons about events using an on-device LLM,
+and acts through speech, LEDs, and notifications. Users create automations
+by typing natural language commands like "when person enters say welcome" —
+the LLM parses intent, the deterministic NL parser compiles triggers and actions,
+and the rules engine executes them at 500ms intervals. The modular protocol
+architecture (PerceptionSource, SensorBus, ActuatorBus) makes it extensible
+to new hardware without code changes.
+
+### 6. Edge-only Value
+The entire pipeline runs on-device. No internet required. No API keys.
+No data leaves the board. Real-time response (sub-second for sensor triggers,
+~30s for LLM commands). Works offline indefinitely. Privacy by design.
