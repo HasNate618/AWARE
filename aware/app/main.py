@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
+import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
@@ -23,6 +23,7 @@ from aware.app.parser.nl_parser import parse_rule
 from aware.app.perception.interface import PerceptionSource
 from aware.app.perception.mock_camera import MockCamera
 from aware.app.perception.yolo import YOLOCamera
+from aware.app.perception.yamnet import YAMNetMic
 from aware.app.rules.engine import RulesEngine
 from aware.app.rules.store import RulesStore
 
@@ -31,19 +32,32 @@ logger = logging.getLogger(__name__)
 MOCK_SNAPSHOT_INTERVAL = 0.5  # seconds
 
 
-async def perception_loop(bus: EventBus, camera: PerceptionSource) -> None:
-    """Run camera in background, publishing snapshots to event bus."""
+async def perception_loop(bus: EventBus, camera: PerceptionSource, mic: YAMNetMic | None = None) -> None:
+    """Run camera + mic in background, publishing snapshots to event bus."""
     await camera.start()
     # If YOLO camera, run its inference loop in parallel
     if isinstance(camera, YOLOCamera):
         asyncio.create_task(camera.run_inference_loop())
+    # Start mic detection loop
+    if mic is not None:
+        asyncio.create_task(mic.run_detection_loop())
     try:
         while True:
-            snapshot = await camera.snapshot()
-            await bus.publish("perception", {"snapshot": snapshot})
+            # Merge camera + mic snapshots
+            cam_snap = await camera.snapshot()
+            sounds_snap = await mic.snapshot() if mic else None
+            merged = PerceptionSnapshot(
+                detections=cam_snap.detections,
+                sounds=sounds_snap.sounds if sounds_snap else [],
+                source=cam_snap.source,
+                timestamp=cam_snap.timestamp,
+            )
+            await bus.publish("perception", {"snapshot": merged})
             await asyncio.sleep(MOCK_SNAPSHOT_INTERVAL)
     except asyncio.CancelledError:
         await camera.stop()
+        if mic:
+            await mic.stop()
 
 
 def action_handler_factory(db: EventDB, bus: EventBus) -> Any:
@@ -94,8 +108,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     loop = RulesLoop(engine, bus, settings.rules_tick_ms)
 
     # Auto-detect camera: use YOLO if device exists, else mock
-    camera_device = Path(settings.camera_device)
-    if camera_device.exists():
+    if os.path.exists(settings.camera_device) and os.path.exists(settings.camera_device):  # noqa: ASYNC240
         camera: PerceptionSource = YOLOCamera(
             device=settings.camera_device,
             model_path=settings.model_path,
@@ -128,8 +141,17 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     app.state.llm = llm
     app.state.camera = camera
 
+    # Start mic for sound detection
+    mic: YAMNetMic | None = None
+    try:
+        mic = YAMNetMic()
+        app.state.mic = mic
+        logger.info("Mic initialized for sound detection")
+    except Exception:
+        logger.warning("Could not initialize mic")
+
     loop_task = asyncio.create_task(loop.start())
-    camera_task = asyncio.create_task(perception_loop(bus, camera))
+    camera_task = asyncio.create_task(perception_loop(bus, camera, mic))
     logger.info("AWARE started on %s:%d", settings.host, settings.port)
 
     yield
@@ -180,11 +202,11 @@ async def get_snapshot() -> dict[str, object]:
 
 
 @app.get("/api/video")
-async def video_stream():
+async def video_stream() -> StreamingResponse:
     """MJPEG stream with YOLO bounding boxes overlaid."""
     camera = app.state.camera
 
-    async def generate():
+    async def generate() -> AsyncGenerator[bytes, None]:
         while True:
             frame_bytes = None
             if isinstance(camera, YOLOCamera):
@@ -212,9 +234,15 @@ async def video_stream():
 async def get_detections(limit: int = 50) -> list[dict[str, object]]:
     """Get recent detection history with timestamps."""
     camera = app.state.camera
+    results = []
     if isinstance(camera, YOLOCamera):
-        return camera.get_detection_log(limit)
-    return []
+        results.extend(camera.get_detection_log(limit))
+    mic = getattr(app.state, "mic", None)
+    if isinstance(mic, YAMNetMic):
+        results.extend(mic.get_sound_log(limit))
+    # Sort by timestamp, most recent first
+    results.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+    return results[:limit]
 
 
 @app.get("/events")
