@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import time
 from pathlib import Path
 
@@ -62,22 +63,34 @@ class RulesStore:
         priority: str,
         triggers: list[dict[str, object]],
         actions: list[dict[str, object]],
-    ) -> None:
+    ) -> str:
+        """Add a rule. Returns the final name (may have suffix if duplicate)."""
         if not self._db:
             raise RuntimeError("Store not opened")
-        await self._db.execute(
-            _INSERT,
-            (
-                name,
-                when_text,
-                then_text,
-                priority,
-                json.dumps(triggers),
-                json.dumps(actions),
-                time.time(),
-            ),
-        )
-        await self._db.commit()
+        final_name = name
+        for attempt in range(5):
+            try:
+                await self._db.execute(
+                    _INSERT,
+                    (
+                        final_name,
+                        when_text,
+                        then_text,
+                        priority,
+                        json.dumps(triggers),
+                        json.dumps(actions),
+                        time.time(),
+                    ),
+                )
+                await self._db.commit()
+                return final_name
+            except aiosqlite.IntegrityError:
+                if attempt < 4:
+                    final_name = f"{name}_{random.randrange(0, 1000)}"
+                    logger.warning("Rule name '%s' exists, trying '%s'", name, final_name)
+                else:
+                    raise
+        return final_name  # unreachable
 
     async def get_active(self) -> list[dict[str, object]]:
         if not self._db:

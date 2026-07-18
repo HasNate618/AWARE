@@ -374,7 +374,7 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
     actions_dicts: list[dict[str, object]] = [
         {"type": a.type, "params": a.params} for a in parsed.actions
     ]
-    await store.add(
+    final_name = await store.add(
         name=parsed.name,
         when_text=spec.when,
         then_text=spec.then,
@@ -387,7 +387,7 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
     await db.log(
         "rule_created",
         {
-            "name": parsed.name,
+            "name": final_name,
             "when": spec.when,
             "then": spec.then,
             "priority": parsed.priority,
@@ -395,11 +395,11 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
     )
 
     # 5. Broadcast update
-    await bus.publish("rules", {"event": "created", "name": parsed.name})
+    await bus.publish("rules", {"event": "created", "name": final_name})
 
-    logger.info("Rule created: %s", parsed.name)
+    logger.info("Rule created: %s", final_name)
     return CommandResponse(
-        rule_name=parsed.name,
+        rule_name=final_name,
         when=spec.when,
         then=spec.then,
         priority=parsed.priority,
