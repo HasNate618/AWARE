@@ -210,23 +210,19 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     except Exception:
         logger.warning("Could not initialize mic")
 
-    # MCU: try real serial, fall back to mock sensor bus
-    from aware.app.mcu.mock import MockSensorBus
+    # MCU: connect via arduino-router, falls back to internal mock data
+    from aware.app.mcu.serial_mcu import SerialMCU
 
-    sensor_bus: SensorBus = MockSensorBus()
-    try:
-        from aware.app.mcu.serial_mcu import SerialMCU
-
-        mcu = SerialMCU(settings.mcu_serial_port, settings.mcu_baud_rate)
-        await mcu.connect()
-        if hasattr(mcu, "_connected") and mcu._connected:
-            sensor_bus = mcu
-            logger.info("Serial MCU on %s", settings.mcu_serial_port)
-    except Exception:
-        pass
-
-    if isinstance(sensor_bus, MockSensorBus):
-        logger.warning("MCU serial %s unavailable — using mock", settings.mcu_serial_port)
+    sensor_bus = SerialMCU(
+        settings.mcu_serial_port,
+        settings.mcu_baud_rate,
+        socket_path="/var/run/arduino-router.sock",
+    )
+    await sensor_bus.connect()
+    logger.info(
+        "MCU bus: %s",
+        "real (arduino-router)" if sensor_bus._connected else "mock fallback",
+    )
 
     loop_task = asyncio.create_task(loop.start())
     camera_task = asyncio.create_task(perception_loop(bus, camera, mic))

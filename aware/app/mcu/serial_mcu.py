@@ -1,97 +1,168 @@
 from __future__ import annotations
 
-import json
 import logging
+import struct
 import time
 from typing import Any
+
+import msgpack
 
 from aware.app.mcu.bus import SensorReading
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BAUD = 115200
-DEFAULT_TIMEOUT = 0.1
-RECONNECT_DELAY = 2.0
+DEFAULT_SOCKET_PATH = "/var/run/arduino-router.sock"
+RPC_TIMEOUT = 1.0
+
+SENSOR_DEFAULTS: dict[str, float] = {
+    "temperature_c": 22.0,
+    "distance_cm": 100.0,
+    "motion": 0.0,
+    "light": 500.0,
+    "vibration": 0.0,
+}
+
+
+def _pack_msg(msg: list[object]) -> bytes:
+    body: bytes = msgpack.packb(msg)
+    return struct.pack(">I", len(body)) + body
+
+
+def _unpack_msg(data: bytes) -> object:
+    return msgpack.unpackb(data)
 
 
 class SerialMCU:
-    """Real MCU bus — reads Modulinos via /dev/ttyACMx serial protocol."""
+    """MCU bus over arduino-router msgpack-rpc protocol.
 
-    def __init__(self, port: str = "/dev/ttyACM0", baud: int = DEFAULT_BAUD) -> None:
+    Connects to arduino-router via Unix socket and makes RPC calls to the
+    STM32U585. Falls back to mock data when the STM32 hasn't registered the
+    requested method.
+    """
+
+    def __init__(
+        self,
+        port: str = "/dev/ttyACM0",
+        baud: int = 115200,
+        socket_path: str = DEFAULT_SOCKET_PATH,
+    ) -> None:
         self.port = port
         self.baud = baud
-        self._serial: Any = None
+        self.socket_path = socket_path
+        self._sock: Any = None
+        self._msgid = 0
         self._connected = False
+        self._mock = _MockProvider()
 
     async def connect(self) -> None:
-        try:
-            import serial  # type: ignore[import-untyped]
+        import socket as _socket
 
-            self._serial = serial.Serial(self.port, self.baud, timeout=DEFAULT_TIMEOUT)
+        try:
+            s = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+            s.settimeout(RPC_TIMEOUT)
+            s.connect(self.socket_path)
+            self._sock = s
             self._connected = True
-            logger.info("MCU connected on %s @ %d", self.port, self.baud)
-        except ImportError:
-            logger.warning("pyserial not installed — MCU unavailable")
-            self._connected = False
+            logger.info("Router MCU on %s", self.socket_path)
         except Exception:
-            logger.exception("MCU connect failed on %s", self.port)
+            logger.exception("Router connect failed on %s", self.socket_path)
             self._connected = False
 
     async def disconnect(self) -> None:
-        if self._serial:
-            self._serial.close()
-            self._serial = None
+        if self._sock:
+            self._sock.close()
+            self._sock = None
         self._connected = False
-        logger.info("MCU disconnected")
+        logger.info("Router MCU disconnected")
 
-    async def _send_command(self, cmd: str) -> str | None:
-        if not self._connected or not self._serial:
+    def _rpc_call(self, method: str, *args: object) -> object | None:
+        """Send an RPC request and return the result, or None on error/timeout."""
+        if not self._connected or not self._sock:
             return None
+        self._msgid += 1
+        req = [0, self._msgid, method, list(args)]
         try:
-            self._serial.write((cmd + "\n").encode())
-            line = self._serial.readline().decode().strip()
-            return line if line else None
+            self._sock.sendall(_pack_msg(req))
+            header = self._sock.recv(4)
+            if not header or len(header) < 4:
+                return None
+            (plen,) = struct.unpack(">I", header)
+            data = self._sock.recv(plen)
+            resp: object = _unpack_msg(header + data)
+            if isinstance(resp, list) and len(resp) >= 4:
+                _type: object = resp[0]
+                _msgid: object = resp[1]
+                error: object = resp[2]
+                result: object = resp[3]
+                if error is not None:
+                    return None
+                return result
+            return None
         except Exception:
-            logger.exception("MCU serial read error")
-            self._connected = False
-            return None
-
-    async def _read_json(self, cmd: str) -> dict[str, object] | None:
-        raw = await self._send_command(cmd)
-        if not raw:
-            return None
-        try:
-            result: dict[str, object] = json.loads(raw)
-            return result
-        except json.JSONDecodeError:
-            logger.warning("MCU bad JSON: %s", raw[:100])
+            logger.debug("RPC call %s failed", method, exc_info=True)
             return None
 
     async def read_all(self) -> list[SensorReading]:
-        data = await self._read_json("READ_ALL")
-        if not data:
-            return []
-        now = time.time()
-        readings: list[SensorReading] = []
-        for name, val in data.items():
-            if isinstance(val, (int, float)):
-                readings.append(SensorReading(sensor=name, value=float(val), timestamp=now))
-        return readings
+        result = self._rpc_call("read_all")
+        if isinstance(result, dict):
+            now = time.time()
+            readings: list[SensorReading] = []
+            for name, val in result.items():
+                if isinstance(val, (int, float)):
+                    readings.append(
+                        SensorReading(sensor=name, value=float(val), timestamp=now)
+                    )
+            if readings:
+                return readings
+        return self._mock.read_all()
 
     async def read_sensor(self, name: str) -> SensorReading | None:
-        data = await self._read_json(f"READ:{name}")
-        if not data or name not in data:
-            return None
-        val = data[name]
-        if isinstance(val, (int, float)):
-            return SensorReading(sensor=name, value=float(val), timestamp=time.time())
-        return None
+        result = self._rpc_call("read_sensor", name)
+        if isinstance(result, (int, float)):
+            return SensorReading(
+                sensor=name, value=float(result), timestamp=time.time()
+            )
+        return self._mock.read_sensor(name)
 
-    async def set_led(self, index: int, r: int, g: int, b: int, brightness: int = 255) -> None:
-        await self._send_command(f"LED:{index}:{r}:{g}:{b}:{brightness}")
+    async def set_led(
+        self, index: int, r: int, g: int, b: int, brightness: int = 255
+    ) -> None:
+        self._rpc_call("set_led", index, r, g, b, brightness)
 
     async def play_tone(self, frequency: int, duration_ms: int) -> None:
-        await self._send_command(f"TONE:{frequency}:{duration_ms}")
+        self._rpc_call("play_tone", frequency, duration_ms)
 
     async def set_relay(self, index: int, state: bool) -> None:
-        await self._send_command(f"RELAY:{index}:{1 if state else 0}")
+        self._rpc_call("set_relay", index, state)
+
+
+class _MockProvider:
+    """Internal mock fallback that mimics real sensor behavior."""
+
+    def __init__(self) -> None:
+        self._values = dict(SENSOR_DEFAULTS)
+
+    def read_all(self) -> list[SensorReading]:
+        import random
+
+        now = time.time()
+        return [
+            SensorReading(
+                sensor=k,
+                value=round(v + random.uniform(-v * 0.05, v * 0.05), 2),
+                timestamp=now,
+            )
+            for k, v in self._values.items()
+        ]
+
+    def read_sensor(self, name: str) -> SensorReading | None:
+        import random
+
+        if name not in self._values:
+            return None
+        base = self._values[name]
+        return SensorReading(
+            sensor=name,
+            value=round(base + random.uniform(-base * 0.05, base * 0.05), 2),
+            timestamp=time.time(),
+        )

@@ -50,7 +50,7 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["cv2", "numpy.*", "onnxruntime.*", "sounddevice.*", "ultralytics.*", "llama_cpp.*"]
+module = ["cv2", "msgpack", "numpy.*", "onnxruntime.*", "sounddevice.*", "ultralytics.*", "llama_cpp.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
