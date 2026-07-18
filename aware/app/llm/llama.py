@@ -13,20 +13,29 @@ from aware.app.llm.interface import RuleSpec
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
-    "Create a rule from the user's command. "
-    'Ex: {"name": "greet", "when": "person detected", '
-    '"then": "say welcome", "priority": "normal"}\n'
+    "Create a JSON rule from the user's command.\n\n"
+    "Examples:\n"
+    'User: when person walks in say welcome\n'
+    'Output: {"name": "greet", "when": "person detected", '
+    '"then": "say welcome", "priority": "normal"}\n\n'
+    'User: when glass breaks after 10pm sound alarm\n'
+    'Output: {"name": "night_alert", '
+    '"when": "glass breaking sound and after 10pm", '
+    '"then": "sound alarm", "priority": "high"}\n\n'
+    'User: when doorbell rings flash green\n'
+    'Output: {"name": "doorbell_alert", '
+    '"when": "doorbell sound", '
+    '"then": "flash green", "priority": "normal"}'
 )
 
 # Grammar forces valid JSON with the 4 fields we need
 _JSON_GRAMMAR = (
-    'root ::= "{" ws '
-    '"\\"name\\"" ws ":" ws string ws "," ws '
-    '"\\"when\\"" ws ":" ws string ws "," ws '
-    '"\\"then\\"" ws ":" ws string ws "," ws '
-    '"\\"priority\\"" ws ":" ws string ws "}"\n'
-    "string ::= \"\\\"\" (![\"\\\\] | \"\\\\\" (\"\\\\\" | \"/\" | \"b\" | \"f\" | \"n\" | \"r\" | \"t\" | \"u\" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* \"\\\"\"\n"
-    "ws ::= [ \\t\\n]?\n"
+    'root ::= "{" '
+    '"\\"name\\"" ":" string "," '
+    '"\\"when\\"" ":" string "," '
+    '"\\"then\\"" ":" string "," '
+    '"\\"priority\\"" ":" string "}"\n'
+    'string ::= "\\"" ("\\\\" . | [^"\\\\])* "\\""\n'
 )
 
 _NAME_RE = re.compile(r"[^a-z0-9]+", re.IGNORECASE)
