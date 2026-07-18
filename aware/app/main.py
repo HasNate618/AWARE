@@ -20,6 +20,7 @@ from aware.app.core.loop import RulesLoop
 from aware.app.llm.interface import RuleSpec
 from aware.app.llm.llama import LlamaLLM
 from aware.app.llm.stub import StubLLM
+from aware.app.mcu.bus import SensorBus
 from aware.app.memory.db import EventDB
 from aware.app.parser.nl_parser import parse_rule
 from aware.app.perception.interface import PerceptionSnapshot, PerceptionSource
@@ -42,11 +43,14 @@ def perception_logger_factory(db: EventDB) -> Any:
         if not snapshot:
             return
         if snapshot.detections or snapshot.sounds:
-            await db.log("perception", {
-                "detections": [(d.label, d.confidence) for d in snapshot.detections],
-                "sounds": [(s.label, s.confidence) for s in snapshot.sounds],
-                "source": snapshot.source,
-            })
+            await db.log(
+                "perception",
+                {
+                    "detections": [(d.label, d.confidence) for d in snapshot.detections],
+                    "sounds": [(s.label, s.confidence) for s in snapshot.sounds],
+                    "source": snapshot.source,
+                },
+            )
 
     return handle_perception
 
@@ -85,20 +89,20 @@ async def perception_loop(
 SENSOR_READ_INTERVAL = 2.0  # seconds
 
 
-async def sensor_loop(bus: EventBus, db: EventDB) -> None:
-    """Read mock sensors periodically and log to DB for timeseries."""
-    from aware.app.mcu.mock import MockSensorBus
-
-    sensors = MockSensorBus()
+async def sensor_loop(sensors: SensorBus, bus: EventBus, db: EventDB) -> None:
+    """Read sensors periodically and log to DB for timeseries."""
     try:
         while True:
             readings = await sensors.read_all()
             for r in readings:
-                await db.log(f"sensor:{r.sensor}", {
-                    "label": r.sensor,
-                    "value": r.value,
-                    "unit": r.unit,
-                })
+                await db.log(
+                    f"sensor:{r.sensor}",
+                    {
+                        "label": r.sensor,
+                        "value": r.value,
+                        "unit": r.unit,
+                    },
+                )
             await asyncio.sleep(SENSOR_READ_INTERVAL)
     except asyncio.CancelledError:
         pass
@@ -175,7 +179,8 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     # Choose LLM: stub (instant, deterministic) or real (llama.cpp server)
     if settings.llm_server_url:
         llm: StubLLM | LlamaLLM = LlamaLLM(
-            base_url=settings.llm_server_url, timeout=settings.llm_timeout,
+            base_url=settings.llm_server_url,
+            timeout=settings.llm_timeout,
         )
         logger.info("Using real LLM at %s", settings.llm_server_url)
     else:
@@ -205,9 +210,24 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     except Exception:
         logger.warning("Could not initialize mic")
 
+    # MCU: try real serial, fall back to mock sensor bus
+    from aware.app.mcu.mock import MockSensorBus
+
+    sensor_bus: SensorBus = MockSensorBus()
+    try:
+        from aware.app.mcu.serial_mcu import SerialMCU
+
+        mcu = SerialMCU(settings.mcu_serial_port, settings.mcu_baud_rate)
+        await mcu.connect()
+        if hasattr(mcu, "_connected") and mcu._connected:
+            sensor_bus = mcu
+            logger.info("Serial MCU on %s", settings.mcu_serial_port)
+    except Exception:
+        pass
+
     loop_task = asyncio.create_task(loop.start())
     camera_task = asyncio.create_task(perception_loop(bus, camera, mic))
-    sensor_task = asyncio.create_task(sensor_loop(bus, db))
+    sensor_task = asyncio.create_task(sensor_loop(sensor_bus, bus, db))
     logger.info("AWARE started on %s:%d", settings.host, settings.port)
 
     yield
