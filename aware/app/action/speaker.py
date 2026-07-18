@@ -2,16 +2,30 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import subprocess
+import time
 
 logger = logging.getLogger(__name__)
+
+_ACTION_VERB_RE = re.compile(r"^(say|speak|announce|play|alert|notify)\s+", re.IGNORECASE)
+_last_spoke: float = 0.0
 
 
 async def speak(text: str) -> None:
     """Speak text using espeak-ng TTS played through built-in audio."""
     text = text.strip().strip('"').strip("'")
+    # Strip action verb prefix
+    text = _ACTION_VERB_RE.sub("", text).strip()
     if not text:
         return
+
+    # Debounce: don't speak more than once per 3 seconds
+    global _last_spoke
+    now = time.time()
+    if now - _last_spoke < 3.0:
+        return
+    _last_spoke = now
 
     try:
         # Generate WAV via espeak-ng
