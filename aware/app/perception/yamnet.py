@@ -119,7 +119,7 @@ class YAMNetMic:
         sample_rate: int = 0,  # 0 = auto-detect native rate
         chunk_duration: float = 0.975,
         energy_threshold: float = 0.005,
-        detection_interval: float = 0.5,
+        detection_interval: float = 0.25,
     ) -> None:
         self.device = device
         self.target_rate = 16000
@@ -133,7 +133,7 @@ class YAMNetMic:
         )
         self._sound_log: deque[dict[str, object]] = deque(maxlen=200)
         self._stream: object | None = None
-        self._audio_queue: deque[np.ndarray] = deque(maxlen=10)
+        self._audio_queue: deque[np.ndarray] = deque(maxlen=50)
 
     async def start(self) -> None:
         self._running = True
@@ -231,9 +231,9 @@ class YAMNetMic:
 
     def _detect(self) -> PerceptionSnapshot:
         """Accumulate audio chunks and classify."""
-        # Accumulate audio from queue
+        # Accumulate ALL audio from queue
         chunks: list[np.ndarray] = []
-        while self._audio_queue and len(chunks) < 20:
+        while self._audio_queue:
             try:
                 chunks.append(self._audio_queue.popleft())
             except IndexError:
@@ -270,11 +270,11 @@ class YAMNetMic:
         rms_val = _rms(audio)
         sounds_raw = _classify_sound(audio, self.target_rate, rms_val, self.energy_threshold)
 
-        # Log audio level periodically for debugging
-        if rms_val > self.energy_threshold:
-            logger.debug("[sound] rms=%.4f threshold=%.4f sounds=%s",
-                         rms_val, self.energy_threshold,
-                         [(l, c) for l, c in sounds_raw if l != "silence"])
+        # Log audio level for debugging
+        if rms_val > self.energy_threshold * 0.5:
+            classified = [(l, c) for l, c in sounds_raw if l != "silence"]
+            if classified:
+                logger.info("[sound] rms=%.4f detected=%s", rms_val, classified)
 
         sounds = [
             Detection(label=label, confidence=conf)
