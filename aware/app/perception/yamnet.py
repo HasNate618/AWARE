@@ -75,7 +75,7 @@ def _classify_sound(
     audio: np.ndarray, sr: int, rms: float, energy_threshold: float
 ) -> list[tuple[str, float]]:
     """Classify audio chunk into sound events with confidence scores."""
-    if rms < energy_threshold * 0.5:
+    if rms < energy_threshold * 0.8:
         return [("silence", 0.9)]
 
     centroid = _spectral_centroid(audio, sr)
@@ -93,7 +93,7 @@ def _classify_sound(
             # Boost confidence for high-energy events
             if rms > energy_threshold * 3:
                 conf = min(conf + 0.25, 1.0)
-            if conf > 0.2:
+            if conf > 0.1:
                 detections.append((label, round(conf, 3)))
 
     # Speech detection: centroid in speech range + some energy
@@ -118,7 +118,7 @@ class YAMNetMic:
         device: int | str | None = None,
         sample_rate: int = 0,  # 0 = auto-detect native rate
         chunk_duration: float = 0.975,
-        energy_threshold: float = 0.002,
+        energy_threshold: float = 0.001,
         detection_interval: float = 0.25,
     ) -> None:
         self.device = device
@@ -147,20 +147,31 @@ class YAMNetMic:
                     if d["max_input_channels"] > 0 and "CAMERA" in d.get("name", "").upper():
                         self.device = i
                         self.device_rate = int(d["default_samplerate"])
-                        logger.info("Found USB mic: %s (device %d, %dHz)", d["name"], i, self.device_rate)
+                        logger.info(
+                            "Found USB mic: %s (device %d, %dHz)", d["name"], i, self.device_rate
+                        )
                         break
                 if self.device is None:
                     for i, d in enumerate(devices):
                         if d["max_input_channels"] > 0 and "USB" in d.get("name", "").upper():
                             self.device = i
                             self.device_rate = int(d["default_samplerate"])
-                            logger.info("Found USB mic: %s (device %d, %dHz)", d["name"], i, self.device_rate)
+                            logger.info(
+                                "Found USB mic: %s (device %d, %dHz)",
+                                d["name"],
+                                i,
+                                self.device_rate,
+                            )
                             break
                 if self.device is None:
                     self.device = 0
                     dev_info = sd.query_devices(self.device, "input")
                     self.device_rate = int(dev_info["default_samplerate"])
-                    logger.warning("No USB mic found, using default device %d (%dHz)", self.device, self.device_rate)
+                    logger.warning(
+                        "No USB mic found, using default device %d (%dHz)",
+                        self.device,
+                        self.device_rate,
+                    )
 
             if self.device_rate <= 0:
                 self.device_rate = 48000
@@ -222,11 +233,13 @@ class YAMNetMic:
                 self._last_snapshot = snapshot
                 if snapshot.sounds:
                     for snd in snapshot.sounds:
-                        self._sound_log.append({
-                            "label": snd.label,
-                            "confidence": snd.confidence,
-                            "timestamp": snapshot.timestamp,
-                        })
+                        self._sound_log.append(
+                            {
+                                "label": snd.label,
+                                "confidence": snd.confidence,
+                                "timestamp": snapshot.timestamp,
+                            }
+                        )
                         logger.info("[sound] %s (%.0f%%)", snd.label, snd.confidence * 100)
                 elif cycle % 20 == 0:
                     logger.info("[sound] queue=%d no detections", queue_len)
@@ -245,9 +258,7 @@ class YAMNetMic:
                 break
 
         if not chunks:
-            return PerceptionSnapshot(
-                detections=[], sounds=[], source="mic", timestamp=time.time()
-            )
+            return PerceptionSnapshot(detections=[], sounds=[], source="mic", timestamp=time.time())
 
         audio = np.concatenate(chunks)
 
@@ -265,9 +276,7 @@ class YAMNetMic:
 
         # Need at least chunk_samples for analysis
         if len(audio) < chunk_samples:
-            return PerceptionSnapshot(
-                detections=[], sounds=[], source="mic", timestamp=time.time()
-            )
+            return PerceptionSnapshot(detections=[], sounds=[], source="mic", timestamp=time.time())
 
         # Use the latest chunk_samples
         audio = audio[-chunk_samples:]
