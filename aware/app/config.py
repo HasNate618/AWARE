@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import glob
 import logging
+import subprocess
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -11,8 +13,33 @@ load_dotenv()
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 
 
+def detect_camera() -> str:
+    """Find the first UVC camera device. Falls back to /dev/video0."""
+    try:
+        result = subprocess.run(
+            ["v4l2-ctl", "--list-devices"],
+            capture_output=True, text=True, timeout=3,
+        )
+        for line in result.stdout.splitlines():
+            if "CAMERA" in line.upper() or "UVC" in line.upper():
+                # Next non-empty indented line is the device
+                idx = result.stdout.splitlines().index(line)
+                for subline in result.stdout.splitlines()[idx + 1:]:
+                    stripped = subline.strip()
+                    if stripped.startswith("/dev/video"):
+                        return stripped
+    except Exception:
+        pass
+    # Fallback: try /dev/video0 first, then any video device
+    for dev in sorted(glob.glob("/dev/video*")):
+        return dev
+    return "/dev/video0"
+
+
 class Settings(BaseSettings):
-    camera_device: str = "/dev/video0"
+    camera_device: str = ""  # empty = auto-detect UVC camera
+    mic_device: str = ""  # empty = auto-detect USB mic (alsa card)
+    model_path: str = "models/yolov8n.onnx"
     mcu_serial_port: str = "/dev/ttyACM0"
     mcu_baud_rate: int = 115200
     db_path: str = "aware.db"
@@ -32,7 +59,10 @@ class Settings(BaseSettings):
 
 
 def get_settings() -> Settings:
-    return Settings()
+    s = Settings()
+    if not s.camera_device:
+        s.camera_device = detect_camera()
+    return s
 
 
 def setup_logging(level: str = "INFO") -> None:

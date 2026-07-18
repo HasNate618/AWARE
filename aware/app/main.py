@@ -77,6 +77,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     if camera_device.exists():
         camera: PerceptionSource = YOLOCamera(
             device=settings.camera_device,
+            model_path=settings.model_path,
             confidence=0.5,
             inference_interval=0.5,
         )
