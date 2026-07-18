@@ -112,11 +112,22 @@ class SerialMCU:
                 SensorReading(sensor="temperature_c", value=float(temp), timestamp=now)
             )
 
-        dist = self._rpc_call("read_distance")
-        if isinstance(dist, (int, float)) and dist > 0:
+        dist_mm = self._rpc_call("read_distance")
+        if isinstance(dist_mm, (int, float)):
             readings.append(
-                SensorReading(sensor="distance_cm", value=float(dist), timestamp=now)
+                SensorReading(
+                    sensor="distance_cm",
+                    value=float(dist_mm) / 10.0,
+                    timestamp=now,
+                )
             )
+
+        for axis, name in [("accel_x", "accel_x"), ("accel_y", "accel_y"), ("accel_z", "accel_z")]:
+            val = self._rpc_call(axis)
+            if isinstance(val, (int, float)):
+                readings.append(
+                    SensorReading(sensor=name, value=float(val), timestamp=now)
+                )
 
         if readings:
             return readings
