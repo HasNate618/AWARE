@@ -1,12 +1,14 @@
 [Unit]
 Description=AWARE - Autonomous Witness And Response Engine
-After=network.target
+After=network.target bluetooth.target
+Wants=bluetooth.service
 
 [Service]
 Type=simple
-User=aware
-WorkingDirectory=/home/aware/aware
-ExecStart=/home/aware/aware/.venv/bin/python -m aware.app.main
+User=arduino
+WorkingDirectory=/home/arduino/aware
+ExecStartPre=/home/arduino/aware/scripts/connect-bt.sh
+ExecStart=/home/arduino/aware/.venv/bin/python -m aware.app.main
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1

@@ -43,7 +43,7 @@ def _classify_event(audio: np.ndarray, sr: int) -> tuple[str, float]:
 
     low_energy = band_ratio(100, 400)        # thump/knock
     mid_energy = band_ratio(400, 2000)       # speech/doorbell
-    high_energy = band_ratio(2000, 8000)     # glass/shatter
+    _ = band_ratio(2000, 8000)               # glass/shatter
     broad_energy = band_ratio(100, 8000)     # broad spectrum
 
     # High frequency spike → glass break
@@ -271,7 +271,10 @@ class YAMNetMic:
                 "confidence": conf,
                 "timestamp": now,
             })
-            logger.info("[sound] %s (%.0f%%) rms=%.5f ratio=%.1f", label, conf * 100, rms_val, ratio)
+            logger.info(
+                "[sound] %s (%.0f%%) rms=%.5f ratio=%.1f",
+                label, conf * 100, rms_val, ratio,
+            )
             return PerceptionSnapshot(
                 detections=[], sounds=[sound], source="mic", timestamp=now,
             )

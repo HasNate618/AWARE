@@ -295,6 +295,24 @@ async def get_detections(limit: int = 50) -> list[dict[str, object]]:
     return results[:limit]
 
 
+@app.get("/api/objects")
+async def get_objects(limit: int = 50) -> list[dict[str, object]]:
+    """Get recent object detection history (YOLO only)."""
+    camera = app.state.camera
+    if isinstance(camera, YOLOCamera):
+        return camera.get_detection_log(limit)
+    return []
+
+
+@app.get("/api/sounds")
+async def get_sounds(limit: int = 50) -> list[dict[str, object]]:
+    """Get recent sound detection history (YAMNet only)."""
+    mic = getattr(app.state, "mic", None)
+    if isinstance(mic, YAMNetMic):
+        return mic.get_sound_log(limit)
+    return []
+
+
 @app.get("/events")
 async def events(topic: str | None = None, limit: int = 50) -> list[dict[str, object]]:
     db: EventDB = app.state.db
