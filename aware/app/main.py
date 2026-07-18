@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from aware.app.action.speaker import speak as speak_text
 from aware.app.config import get_settings, setup_logging
 from aware.app.core.event_bus import EventBus
 from aware.app.core.loop import RulesLoop
@@ -31,6 +32,29 @@ from aware.app.rules.store import RulesStore
 logger = logging.getLogger(__name__)
 
 MOCK_SNAPSHOT_INTERVAL = 0.5  # seconds
+
+
+def perception_logger_factory(db: EventDB) -> Any:
+    """Create a handler that logs each detection/sound to the DB for timeseries."""
+
+    async def handle_perception(event: dict[str, Any]) -> None:
+        snapshot: PerceptionSnapshot | None = event.get("snapshot")
+        if not snapshot:
+            return
+        for det in snapshot.detections:
+            await db.log("detection", {
+                "label": det.label,
+                "value": det.confidence,
+                "source": snapshot.source,
+            })
+        for snd in snapshot.sounds:
+            await db.log("sound", {
+                "label": snd.label,
+                "value": snd.confidence,
+                "source": snapshot.source,
+            })
+
+    return handle_perception
 
 
 async def perception_loop(
@@ -64,6 +88,28 @@ async def perception_loop(
             await mic.stop()
 
 
+SENSOR_READ_INTERVAL = 2.0  # seconds
+
+
+async def sensor_loop(bus: EventBus, db: EventDB) -> None:
+    """Read mock sensors periodically and log to DB for timeseries."""
+    from aware.app.mcu.mock import MockSensorBus
+
+    sensors = MockSensorBus()
+    try:
+        while True:
+            readings = await sensors.read_all()
+            for r in readings:
+                await db.log(f"sensor:{r.sensor}", {
+                    "label": r.sensor,
+                    "value": r.value,
+                    "unit": r.unit,
+                })
+            await asyncio.sleep(SENSOR_READ_INTERVAL)
+    except asyncio.CancelledError:
+        pass
+
+
 def action_handler_factory(db: EventDB, bus: EventBus) -> Any:
     """Create a handler that logs actions with detection context to the database."""
 
@@ -80,13 +126,18 @@ def action_handler_factory(db: EventDB, bus: EventBus) -> Any:
             detection.get("label", "none"),
         )
 
+        # Execute the action
+        if action_type == "speak":
+            text = action_params.get("text", "")
+            asyncio.create_task(speak_text(text))
+
         # Build descriptive message
         det_label = detection.get("label", "unknown")
         det_conf = detection.get("confidence", 0)
-        speak_text = action_params.get("text", "")
+        action_msg = action_params.get("text", "")
         msg = f"Rule '{rule_name}' triggered by {det_label} ({det_conf:.0%}). Action: {action_type}"
-        if speak_text:
-            msg += f' → "{speak_text}"'
+        if action_msg:
+            msg += f' → "{action_msg}"'
 
         await db.log(
             "action_executed",
@@ -140,6 +191,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     await engine.start()
 
     bus.subscribe("action", action_handler_factory(db, bus))
+    bus.subscribe("perception", perception_logger_factory(db))
 
     app.state.bus = bus
     app.state.db = db
@@ -159,12 +211,14 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 
     loop_task = asyncio.create_task(loop.start())
     camera_task = asyncio.create_task(perception_loop(bus, camera, mic))
+    sensor_task = asyncio.create_task(sensor_loop(bus, db))
     logger.info("AWARE started on %s:%d", settings.host, settings.port)
 
     yield
 
     loop.stop()
     camera_task.cancel()
+    sensor_task.cancel()
     loop_task.cancel()
     await engine.stop()
     await store.close()
@@ -336,15 +390,40 @@ async def get_timeseries(
     window: int = 3600,
     bucket: int = 60,
 ) -> list[dict[str, object]]:
-    """Aggregate events into time buckets for charting.
-
-    Args:
-        topic: Event topic to aggregate (sensor, detection, action_executed, etc.)
-        window: Time window in seconds (default 1 hour)
-        bucket: Bucket size in seconds (default 1 minute)
-    """
+    """Aggregate events into time buckets for charting."""
     db: EventDB = app.state.db
     return await db.timeseries(topic=topic, window_seconds=window, bucket_seconds=bucket)
+
+
+@app.get("/api/timeseries/all")
+async def get_all_timeseries(
+    window: int = 3600,
+    bucket: int = 60,
+) -> dict[str, list[dict[str, object]]]:
+    """Return timeseries for all data streams, grouped by label.
+
+    Returns dict with keys: detection, sound, sensor (split by name), action_executed.
+    """
+    db: EventDB = app.state.db
+    topics = ["detection", "sound", "action_executed"]
+    result: dict[str, list[dict[str, object]]] = {}
+
+    for t in topics:
+        ts = await db.timeseries(topic=t, window_seconds=window, bucket_seconds=bucket)
+        if ts:
+            result[t] = [{"label": t, "data": ts}]
+
+    # Get sensor readings split by sensor name
+    sensor_topics = await db.sensor_topics()
+    for st in sensor_topics:
+        ts = await db.timeseries(topic=st, window_seconds=window, bucket_seconds=bucket)
+        if ts:
+            sensor_name = st.replace("sensor:", "")
+            if "sensor" not in result:
+                result["sensor"] = []
+            result["sensor"].append({"label": sensor_name, "data": ts})
+
+    return result
 
 
 if __name__ == "__main__":
