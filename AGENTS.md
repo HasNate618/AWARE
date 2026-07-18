@@ -212,9 +212,11 @@ This section captures where the project was left off. OpenCode should read this 
 - **Speak action**: Implemented in aware/app/action/speaker.py using espeak-ng + BlueALSA. Wired into action handler in main.py (fires on action type "speak"). 3s debounce, strips action verb prefix, volume 5%.
 - **Built-in audio**: Broken. Qualcomm SoundWire driver has deferred probe loop (`lpass-tx-swr-active-state`). Use BlueALSA for all audio output.
 - **Rule creation**: Real LLM (MiniCPM5 Q4, ~30s per command) or stub LLM parses "when X say Y" correctly. Triggers: detection, sound, time. AND semantics across types.
-- **Dashboard**: Live MJPEG video, detection log with timestamps, rules, activity log, command input.
+- **Dashboard**: Live MJPEG video, detection log with timestamps, rules, activity log, command input, sensor timeseries charts.
 - **Systemd service**: aware.service installed, enabled, auto-restarts. Working directory /home/arduino/aware.
 - **Real LLM**: llama.cpp server running on board at port 8080 with MiniCPM5-1B Q4_K_M (657MB). Wired via AWARE_LLM_SERVER_URL in .env.
+- **STM32 Modulino temperature**: Working. Real STM32U585 firmware (Arduino_RouterBridge) reads Modulino temp sensor via I2C, exposes `read_temp` RPC through arduino-router. Python SerialMCU calls it and returns 10.23°C to dashboard.
+- **STM32 Modulino distance**: I2C address not yet identified. Falls back to mock (~100cm).
 
 ### Board details
 - User: arduino, password: aware2026
