@@ -32,7 +32,15 @@ _SYSTEM_PROMPT = (
     'User: when doorbell rings flash green\n'
     'Output: {"name": "doorbell_alert", '
     '"when": "doorbell sound", '
-    '"then": "flash green", "priority": "normal"}'
+    '"then": "flash green", "priority": "normal"}\n\n'
+    'User: when bottle within 1m say i am hydrophobic\n'
+    'Output: {"name": "hydrophobic", '
+    '"when": "bottle within 1m", '
+    '"then": "say i am hydrophobic", "priority": "normal"}\n\n'
+    'User: when hot flash red\n'
+    'Output: {"name": "overheat", '
+    '"when": "hot", '
+    '"then": "flash red", "priority": "high"}'
 )
 
 # Grammar forces valid JSON with the 4 fields we need
