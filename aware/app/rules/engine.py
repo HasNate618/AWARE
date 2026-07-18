@@ -63,22 +63,22 @@ class RulesEngine:
         triggers: list[dict[str, str]] = rule.get("triggers", [])  # type: ignore[assignment]
         if not triggers:
             return False
-        for trigger in triggers:
-            t_type = trigger.get("type", "")
-            t_value = trigger.get("value", "")
-            if t_type == "detection":
-                if any(d.label == t_value for d in snapshot.detections):
-                    return True
-            elif t_type == "sound":
-                if any(s.label == t_value for s in snapshot.sounds):
-                    return True
-            elif t_type == "time":
-                hour = time.localtime().tm_hour
-                time_range = _parse_time_range(trigger.get("time_range"))
-                if time_range:
-                    start, end = time_range
-                    if start <= hour < end:
-                        return True
+        # AND semantics: ALL triggers must match
+        return all(self._trigger_matches(t, snapshot) for t in triggers)
+
+    def _trigger_matches(self, trigger: dict[str, str], snapshot: PerceptionSnapshot) -> bool:
+        t_type = trigger.get("type", "")
+        t_value = trigger.get("value", "")
+        if t_type == "detection":
+            return any(d.label == t_value for d in snapshot.detections)
+        elif t_type == "sound":
+            return any(s.label == t_value for s in snapshot.sounds)
+        elif t_type == "time":
+            hour = time.localtime().tm_hour
+            time_range = _parse_time_range(trigger.get("time_range"))
+            if time_range:
+                start, end = time_range
+                return start <= hour < end
         return False
 
     async def _execute(self, rule: dict[str, object]) -> None:
