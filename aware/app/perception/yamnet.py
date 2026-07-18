@@ -210,10 +210,13 @@ class YAMNetMic:
 
     async def run_detection_loop(self) -> None:
         """Background loop: capture audio, classify sounds, store snapshot."""
+        cycle = 0
         while self._running:
-            if not self._audio_queue:
-                await asyncio.sleep(0.1)
+            queue_len = len(self._audio_queue)
+            if queue_len == 0:
+                await asyncio.sleep(0.05)
                 continue
+            cycle += 1
             try:
                 snapshot = await asyncio.to_thread(self._detect)
                 self._last_snapshot = snapshot
@@ -225,6 +228,8 @@ class YAMNetMic:
                             "timestamp": snapshot.timestamp,
                         })
                         logger.info("[sound] %s (%.0f%%)", snd.label, snd.confidence * 100)
+                elif cycle % 20 == 0:
+                    logger.debug("[sound] queue=%d no detections", queue_len)
             except Exception:
                 logger.exception("Sound detection error")
             await asyncio.sleep(self.detection_interval)
@@ -270,11 +275,12 @@ class YAMNetMic:
         rms_val = _rms(audio)
         sounds_raw = _classify_sound(audio, self.target_rate, rms_val, self.energy_threshold)
 
-        # Log audio level for debugging
-        if rms_val > self.energy_threshold * 0.5:
-            classified = [(l, c) for l, c in sounds_raw if l != "silence"]
-            if classified:
-                logger.info("[sound] rms=%.4f detected=%s", rms_val, classified)
+        # Always log audio level for debugging
+        classified = [(l, c) for l, c in sounds_raw if l != "silence"]
+        if classified:
+            logger.info("[sound] rms=%.5f detected=%s", rms_val, classified)
+        elif rms_val > 0.0005:
+            logger.debug("[sound] rms=%.5f (below threshold %.5f)", rms_val, self.energy_threshold)
 
         sounds = [
             Detection(label=label, confidence=conf)
