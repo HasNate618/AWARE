@@ -13,20 +13,9 @@ from aware.app.llm.interface import RuleSpec
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
-    "You are a home automation assistant. Output ONLY valid JSON "
-    "with fields: name, when, then, priority.\n\n"
-    "Examples:\n"
-    "User: When someone walks in, say welcome\n"
-    'Output: {"name": "greet_person", "when": "person detected", '
-    '"then": "say welcome", "priority": "normal"}\n\n'
-    "User: If glass breaks after 10pm, sound alarm\n"
-    'Output: {"name": "night_glass_break", '
-    '"when": "glass breaking sound and after 10pm", '
-    '"then": "sound alarm", "priority": "high"}\n\n'
-    "User: When doorbell rings, flash green\n"
-    'Output: {"name": "doorbell_alert", '
-    '"when": "doorbell sound", '
-    '"then": "flash green", "priority": "normal"}'
+    "Output JSON with keys: name, when, then, priority. "
+    'Ex: {"name": "greet", "when": "person detected", '
+    '"then": "say welcome", "priority": "normal"}\n'
 )
 
 _NAME_RE = re.compile(r"[^a-z0-9]+", re.IGNORECASE)
@@ -91,7 +80,7 @@ class LlamaLLM:
             "model": self.model,
             "messages": messages,
             "temperature": 0.1,
-            "max_tokens": 128,
+            "max_tokens": 64,
         }
 
         try:
