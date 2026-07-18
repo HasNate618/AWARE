@@ -2,7 +2,7 @@
 # Deploy AWARE to the board via SSH
 set -e
 
-BOARD="${BOARD:-arduino@10.255.228.240}"
+BOARD="${BOARD:-aware@uno-q.local}"
 REMOTE_DIR="~/aware"
 
 echo "Syncing to $BOARD..."
@@ -15,6 +15,6 @@ scp /tmp/aware-sync.tar.gz "$BOARD:/tmp/aware-sync.tar.gz"
 ssh "$BOARD" "cd $REMOTE_DIR && tar xzf /tmp/aware-sync.tar.gz && echo 'Synced OK'"
 
 echo "Restarting service..."
-ssh "$BOARD" "echo aware2026 | sudo -S systemctl restart aware.service 2>/dev/null && echo 'Service restarted'"
+ssh "$BOARD" "sudo systemctl restart aware.service && echo 'Service restarted'"
 
 echo "Deploy complete."

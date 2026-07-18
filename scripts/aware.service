@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=arduino
-WorkingDirectory=/home/arduino/aware
-ExecStart=/home/arduino/aware/.venv/bin/python -m aware.app.main
+User=aware
+WorkingDirectory=/home/aware/aware
+ExecStart=/home/aware/aware/.venv/bin/python -m aware.app.main
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
