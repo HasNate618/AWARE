@@ -103,17 +103,23 @@ class SerialMCU:
             return None
 
     async def read_all(self) -> list[SensorReading]:
-        result = self._rpc_call("read_all")
-        if isinstance(result, dict):
-            now = time.time()
-            readings: list[SensorReading] = []
-            for name, val in result.items():
-                if isinstance(val, (int, float)):
-                    readings.append(
-                        SensorReading(sensor=name, value=float(val), timestamp=now)
-                    )
-            if readings:
-                return readings
+        now = time.time()
+        readings: list[SensorReading] = []
+
+        temp = self._rpc_call("read_temp")
+        if isinstance(temp, (int, float)) and temp > -200:
+            readings.append(
+                SensorReading(sensor="temperature_c", value=float(temp), timestamp=now)
+            )
+
+        dist = self._rpc_call("read_distance")
+        if isinstance(dist, (int, float)) and dist > 0:
+            readings.append(
+                SensorReading(sensor="distance_cm", value=float(dist), timestamp=now)
+            )
+
+        if readings:
+            return readings
         return self._mock.read_all()
 
     async def read_sensor(self, name: str) -> SensorReading | None:
