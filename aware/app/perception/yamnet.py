@@ -12,11 +12,70 @@ from aware.app.perception.interface import Detection, PerceptionSnapshot
 
 logger = logging.getLogger(__name__)
 
-_SOUND_LABELS = ["sound", "silence"]
-
 
 def _rms(audio: np.ndarray) -> float:
     return float(np.sqrt(np.mean(audio.astype(np.float64) ** 2)))
+
+
+def _classify_event(audio: np.ndarray, sr: int) -> tuple[str, float]:
+    """Classify an audio event into a specific sound type with confidence."""
+    fft = np.abs(np.fft.rfft(audio))
+    freqs = np.fft.rfftfreq(len(audio), 1.0 / sr)
+
+    mask = freqs > 100
+    fft_f = fft[mask]
+    freqs_f = freqs[mask]
+
+    total_energy = np.sum(fft_f ** 2)
+    if total_energy < 1e-10:
+        return ("sound", 0.5)
+
+    # Peak analysis
+    peak_idx = fft_f.argmax()
+    peak_freq = freqs_f[peak_idx]
+    peak_energy = fft_f[peak_idx] ** 2
+    peak_ratio = peak_energy / total_energy if total_energy > 0 else 0
+
+    # Energy in frequency bands
+    def band_ratio(fmin: float, fmax: float) -> float:
+        band = (freqs_f >= fmin) & (freqs_f <= fmax)
+        return float(np.sum(fft_f[band] ** 2) / total_energy) if total_energy > 0 else 0.0
+
+    low_energy = band_ratio(100, 400)        # thump/knock
+    mid_energy = band_ratio(400, 2000)       # speech/doorbell
+    high_energy = band_ratio(2000, 8000)     # glass/shatter
+    broad_energy = band_ratio(100, 8000)     # broad spectrum
+
+    # High frequency spike → glass break
+    if peak_freq > 2000 and peak_ratio > 0.3:
+        return ("glass_break", round(min(0.5 + peak_ratio * 0.5, 0.95), 3))
+
+    # Low frequency thump → knock
+    if peak_freq < 400 and low_energy > 0.4 and peak_ratio > 0.15:
+        return ("knock", round(min(0.5 + peak_ratio, 0.9), 3))
+
+    # Mid frequency concentrated → doorbell
+    if 600 < peak_freq < 2500 and mid_energy > 0.5 and peak_ratio > 0.2:
+        return ("doorbell", round(min(0.5 + peak_ratio * 0.8, 0.9), 3))
+
+    # Steady mid frequency → alarm/siren
+    if 500 < peak_freq < 3000 and peak_ratio > 0.25:
+        return ("alarm", round(min(0.5 + peak_ratio * 0.5, 0.9), 3))
+
+    # Harmonic structure → speech/music
+    if 200 < peak_freq < 3000:
+        # Look for harmonics: peaks at multiples of fundamental
+        harmonics = 0
+        for h in range(2, 6):
+            h_idx = np.argmin(np.abs(freqs_f - peak_freq * h))
+            if h_idx < len(fft_f) and fft_f[h_idx] > np.median(fft_f) * 3:
+                harmonics += 1
+        if harmonics >= 2 and mid_energy > 0.3:
+            return ("speech", round(min(0.4 + harmonics * 0.15, 0.9), 3))
+
+    # Generic sound
+    conf = min(0.3 + broad_energy * 0.5, 0.8)
+    return ("sound", round(conf, 3))
 
 
 class YAMNetMic:
@@ -205,17 +264,14 @@ class YAMNetMic:
 
         if ratio > 2.0 and cooldown_ok:
             self._last_event_time = now
-            conf = min(ratio / 5.0, 0.95)
-            sound = Detection(label="sound", confidence=round(conf, 3))
+            label, conf = _classify_event(audio, self.target_rate)
+            sound = Detection(label=label, confidence=conf)
             self._sound_log.append({
-                "label": "sound",
+                "label": label,
                 "confidence": conf,
                 "timestamp": now,
             })
-            logger.info(
-                "[sound] event rms=%.5f baseline=%.5f ratio=%.1f",
-                rms_val, self._baseline_rms, ratio,
-            )
+            logger.info("[sound] %s (%.0f%%) rms=%.5f ratio=%.1f", label, conf * 100, rms_val, ratio)
             return PerceptionSnapshot(
                 detections=[], sounds=[sound], source="mic", timestamp=now,
             )
