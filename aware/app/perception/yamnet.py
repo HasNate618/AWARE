@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import time
 from collections import deque
-from typing import Any
 
 import numpy as np
 
@@ -177,7 +175,6 @@ class YAMNetMic:
                 self.device_rate = 48000
 
             # PortAudio requires exact native rate — always use device_rate
-            chunk_samples = int(self.device_rate * self.chunk_duration)
 
             # Start audio stream in a thread
             def audio_callback(indata, frames, time_info, status):
@@ -287,9 +284,9 @@ class YAMNetMic:
         # Always log audio level for debugging
         classified = [(l, c) for l, c in sounds_raw if l != "silence"]
         if classified:
-            logger.info("[sound] rms=%.5f detected=%s", rms_val, classified)
-        elif rms_val > 0.0005:
-            logger.info("[sound] rms=%.5f (below threshold %.5f)", rms_val, self.energy_threshold)
+            logger.info("[sound] rms=%.6f detected=%s", rms_val, classified)
+        else:
+            logger.info("[sound] rms=%.6f threshold=%.5f silence", rms_val, self.energy_threshold)
 
         sounds = [
             Detection(label=label, confidence=conf)
