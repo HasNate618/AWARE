@@ -181,7 +181,8 @@ class YOLOCamera:
 
             # Encode to JPEG
             _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            return buf.tobytes()
+            result: bytes = buf.tobytes()
+            return result
         except Exception:
             logger.exception("Failed to encode frame")
             return None

@@ -312,56 +312,50 @@
             });
         }
 
-        const COLORS = ['#00ff88', '#ffaa00', '#0088ff', '#ff4444', '#aa66ff', '#ff66aa'];
+        const COLORS = ['#00ff88', '#ffaa00', '#0088ff', '#ff4444', '#aa66ff', '#ff66aa', '#00cccc', '#ff88cc'];
 
         async function updateTimeseries() {
             if (!chart) return;
-            const data = await fetchJSON(`/api/timeseries?topic=${currentTopic}&window=3600&bucket=60`);
-            if (!data || data.length === 0) {
-                chart.data.labels = [];
-                chart.data.datasets = [];
-                chart.update();
-                return;
-            }
+            const all = await fetchJSON('/api/timeseries/all?window=3600&bucket=30');
+            if (!all) { chart.update(); return; }
 
-            const labels = data.map(d => {
-                const dt = new Date(d.timestamp * 1000);
-                return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            });
-
-            // Group by sensor name if data has it, otherwise just plot avg
+            const streamData = all[currentTopic] || [];
             const datasets = [];
-            if (currentTopic === 'sensor') {
-                // For sensor data, we need to extract individual sensor values
-                // Since we aggregate by topic, plot avg/min/max
-                datasets.push({
-                    label: 'avg',
-                    data: data.map(d => d.avg),
-                    borderColor: COLORS[0],
-                    backgroundColor: COLORS[0] + '22',
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 0,
-                });
-                datasets.push({
-                    label: 'max',
-                    data: data.map(d => d.max),
-                    borderColor: COLORS[1],
-                    borderDash: [4, 2],
-                    tension: 0.3,
-                    pointRadius: 0,
-                });
-            } else {
-                // For detections/sounds/actions, plot count
-                datasets.push({
-                    label: 'count',
-                    data: data.map(d => d.count),
-                    borderColor: COLORS[0],
-                    backgroundColor: COLORS[0] + '22',
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 0,
-                });
+            let labels = [];
+            let colorIdx = 0;
+
+            for (const series of streamData) {
+                const color = COLORS[colorIdx % COLORS.length];
+                colorIdx++;
+                const points = series.data || [];
+                if (points.length > 0 && labels.length === 0) {
+                    labels = points.map(d => {
+                        const dt = new Date(d.timestamp * 1000);
+                        return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    });
+                }
+                if (currentTopic === 'sensor') {
+                    datasets.push({
+                        label: series.label,
+                        data: points.map(d => d.avg),
+                        borderColor: color,
+                        backgroundColor: color + '22',
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        borderWidth: 2,
+                    });
+                } else {
+                    datasets.push({
+                        label: series.label,
+                        data: points.map(d => d.count),
+                        borderColor: color,
+                        backgroundColor: color + '22',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                    });
+                }
             }
 
             chart.data.labels = labels;

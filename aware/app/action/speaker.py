@@ -3,9 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import subprocess
-import tempfile
-
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +15,7 @@ async def speak(text: str) -> None:
 
     try:
         # Generate WAV via espeak-ng
-        wav_bytes = subprocess.run(
+        wav_bytes = subprocess.run(  # noqa: ASYNC221
             ["espeak-ng", text, "--stdout"],
             capture_output=True,
             timeout=10,

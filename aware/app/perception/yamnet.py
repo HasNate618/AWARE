@@ -212,7 +212,10 @@ class YAMNetMic:
                 "confidence": conf,
                 "timestamp": now,
             })
-            logger.info("[sound] event rms=%.5f baseline=%.5f ratio=%.1f", rms_val, self._baseline_rms, ratio)
+            logger.info(
+                "[sound] event rms=%.5f baseline=%.5f ratio=%.1f",
+                rms_val, self._baseline_rms, ratio,
+            )
             return PerceptionSnapshot(
                 detections=[], sounds=[sound], source="mic", timestamp=now,
             )

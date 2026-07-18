@@ -120,3 +120,13 @@ class EventDB:
             }
             for row in rows
         ]
+
+    async def sensor_topics(self) -> list[str]:
+        """Return all unique sensor:* topics in the DB."""
+        if not self._db:
+            raise RuntimeError("Database not opened")
+        cursor = await self._db.execute(
+            "SELECT DISTINCT topic FROM events WHERE topic LIKE 'sensor:%'"
+        )
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]

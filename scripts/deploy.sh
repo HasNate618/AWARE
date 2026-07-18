@@ -2,7 +2,7 @@
 # Deploy AWARE to the board via SSH
 set -e
 
-BOARD="${BOARD:-aware@uno-q.local}"
+BOARD="${BOARD:-arduino@10.255.228.240}"
 REMOTE_DIR="~/aware"
 
 echo "Syncing to $BOARD..."
