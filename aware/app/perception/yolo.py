@@ -286,14 +286,15 @@ class YOLOCamera:
 
     async def run_inference_loop(self) -> None:
         """Background loop: capture frame, run YOLO, store snapshot."""
+        cycle = 0
         while self._running:
             if self._cap is None or self._session is None:
                 await asyncio.sleep(1.0)
                 continue
+            cycle += 1
             try:
                 snapshot = await asyncio.to_thread(self._infer)
                 self._last_snapshot = snapshot
-                # Log detections with timestamps
                 if snapshot.detections:
                     for det in snapshot.detections:
                         self._detection_log.append(
@@ -304,6 +305,7 @@ class YOLOCamera:
                                 "timestamp": snapshot.timestamp,
                             }
                         )
+                        logger.info("[yolo] %s %.0f%%", det.label, det.confidence * 100)
             except Exception:
                 logger.exception("YOLO inference error")
             await asyncio.sleep(self.inference_interval)
