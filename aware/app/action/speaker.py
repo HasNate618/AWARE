@@ -11,6 +11,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from aware.app.action.bt_speaker import ensure_bt_speaker_connected
 from aware.app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,8 @@ async def speak(text: str) -> None:
     _last_spoke = now
 
     settings = get_settings()
+    await asyncio.to_thread(ensure_bt_speaker_connected, settings.bt_speaker_mac)
+
     fd, wav_name = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     wav_path = Path(wav_name)

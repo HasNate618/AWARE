@@ -186,6 +186,110 @@ def witness_events_for_display(
     return rows
 
 
+_SENSOR_DELTA_RE = re.compile(
+    r"^(?P<label>\w+) (?P<prev>[\d.]+)(?P<unit>°C|cm)? → (?P<val>[\d.]+)(?P=unit)? "
+    r"\((?P<delta>[+-][\d.]+)(?P=unit)?\)$"
+)
+
+
+def witness_prose_from_events(events: list[WitnessEvent]) -> str:
+    """Context-aware template prose when the LLM is unavailable or low quality."""
+    if not events:
+        return ""
+
+    people = sum(1 for event in events if event.kind == "person")
+    sound_counts: dict[str, int] = {}
+    sensor_notes: list[str] = []
+
+    for event in events:
+        if event.kind == "sound":
+            body = _EVENT_LINE.match(event.line)
+            label = body.group(1).removesuffix(" heard") if body else "sound"
+            sound_counts[label] = sound_counts.get(label, 0) + 1
+            continue
+        if event.kind != "sensor":
+            continue
+        body = _EVENT_LINE.match(event.line)
+        if not body:
+            continue
+        parsed = _SENSOR_DELTA_RE.match(body.group(1))
+        if not parsed:
+            continue
+        label = parsed.group("label")
+        prev = float(parsed.group("prev"))
+        val = float(parsed.group("val"))
+        delta = float(parsed.group("delta"))
+        if label == "distance":
+            if delta <= -15:
+                sensor_notes.append(
+                    f"someone likely approached the booth (distance fell from {prev:.0f} to {val:.0f} cm)"
+                )
+            elif delta >= 15:
+                sensor_notes.append(
+                    f"movement away from the sensor (distance increased to {val:.0f} cm)"
+                )
+        elif label == "temperature" and abs(delta) >= 0.5:
+            direction = "warmed" if delta > 0 else "cooled"
+            sensor_notes.append(
+                f"the area {direction} slightly ({prev:.1f} to {val:.1f} °C)"
+            )
+        elif label == "movement" and val >= 0.15:
+            sensor_notes.append("noticeable movement was detected on the accelerometer")
+
+    parts: list[str] = []
+    if people == 1:
+        parts.append("Someone passed through the camera view")
+    elif people > 1:
+        parts.append(f"{people} people passed through the camera view")
+
+    if sound_counts:
+        if len(sound_counts) == 1 and sum(sound_counts.values()) == 1:
+            label = next(iter(sound_counts))
+            parts.append(f"{label} was heard in the space")
+        else:
+            bits = [
+                f"{label} ×{count}" if count > 1 else label
+                for label, count in sound_counts.items()
+            ]
+            parts.append(f"Sounds in the space included {', '.join(bits)}")
+
+    if sensor_notes:
+        parts.append(sensor_notes[0])
+
+    if not parts:
+        return ""
+    return ". ".join(parts) + "."
+
+
+def witness_prose_from_log_text(text: str) -> str:
+    """Rebuild template prose from stored witness log lines."""
+    events: list[WitnessEvent] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if "person entered frame" in stripped:
+            kind = "person"
+        elif " heard" in stripped:
+            kind = "sound"
+        else:
+            kind = "sensor"
+        events.append(WitnessEvent(timestamp=0.0, line=stripped, kind=kind))
+    return witness_prose_from_events(events)
+
+
+def _is_template_prose(text: str) -> bool:
+    markers = (
+        "passed through the camera view",
+        "was heard in the space",
+        "Sounds in the space included",
+        "likely approached the booth",
+        "movement away from the sensor",
+        "noticeable movement was detected",
+    )
+    return any(marker in text for marker in markers)
+
+
 def format_period_label(start: float, end: float) -> str:
     return (
         f"{datetime.fromtimestamp(start).strftime('%H:%M')}"
@@ -198,11 +302,22 @@ def summaries_for_witness_display(
     *,
     limit: int = 12,
 ) -> list[dict[str, object]]:
-    """Return AI-generated witness log entries for the dashboard."""
+    """Return witness recaps for the dashboard (LLM prose or contextual template fallback)."""
     logs: list[dict[str, object]] = []
     for row in summaries:
         narrative = str(row.get("narrative", "")).strip()
-        if not is_ai_narrative(narrative):
+        if not narrative:
+            continue
+        if _is_template_prose(narrative):
+            text = narrative
+            ai = False
+        elif is_ai_narrative(narrative):
+            text = narrative
+            ai = True
+        else:
+            text = witness_prose_from_log_text(narrative)
+            ai = False
+        if not text:
             continue
         period_start = float(str(row.get("period_start", 0)))
         period_end = float(str(row.get("period_end", 0)))
@@ -211,7 +326,8 @@ def summaries_for_witness_display(
                 "period_start": period_start,
                 "period_end": period_end,
                 "period_label": format_period_label(period_start, period_end),
-                "text": narrative,
+                "text": text,
+                "ai": ai,
             }
         )
     return logs[-limit:]

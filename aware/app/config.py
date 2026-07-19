@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     piper_model_path: str = "models/en_US-lessac-medium.onnx"
     piper_sample_rate: int = 22050
     bt_speaker_volume: str = "40%"
+    bt_speaker_mac: str = "15:D2:D2:C5:6B:0C"
+    bt_reconnect_interval: float = 60.0
     dashboard_dir: str = "dashboard"
     host: str = "0.0.0.0"
     port: int = 8000

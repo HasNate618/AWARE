@@ -93,6 +93,8 @@
         .witness-log .witness-time { font-size: 9px; letter-spacing: 0.08em; color: var(--muted); display: block; margin-bottom: 4px; }
         .witness-log .witness-text { font-size: 12px; color: #ccc; line-height: 1.45; }
         .witness-recap-lbl { font-family: var(--display); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-top: 8px; margin-bottom: 4px; }
+        .witness-recap-lbl.ai { color: rgba(0, 255, 136, 0.55); }
+        .witness-log .witness-kind { font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(0, 255, 136, 0.45); margin-right: 6px; }
 
         .wins { display: flex; gap: 4px; margin-bottom: 8px; }
         .wins button { background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 3px 8px; font-size: 10px; cursor: pointer; font-family: inherit; }
@@ -183,7 +185,9 @@ function showDash() {
                 '<div class="witness-stat"><div class="lbl">Passed by</div><div class="num" id="wPeoplePassed">0</div><div class="unit" id="wWindowLbl">last hour</div></div>' +
                 '<div class="witness-stat"><div class="lbl">Sounds heard</div><div class="num" id="wSoundTotal">0</div><div class="unit" id="wSoundBreakdown">—</div></div>' +
             '</div>' +
-            '<div class="witness-recap-lbl">Witness log</div>' +
+            '<div class="witness-recap-lbl ai">AI witness</div>' +
+            '<ul class="list witness-log" id="wWitnessRecap"><li style="color:var(--muted)">waiting for recap…</li></ul>' +
+            '<div class="witness-recap-lbl">Live activity</div>' +
             '<ul class="list witness-log" id="wWitnessLog"><li style="color:var(--muted)">waiting for activity…</li></ul>' +
         '</div>' +
         '<div class="layout">' +
@@ -346,13 +350,21 @@ function init() {
         wSoundBreakdown.textContent = keys.length
             ? keys.slice(0, 3).map(k => humanLbl(k) + ' ×' + snd[k]).join(' · ')
             : 'listening…';
-        const logs = d.witness_logs || [];
-        wWitnessLog.innerHTML = logs.length
-            ? logs.slice().reverse().map(e =>
-                '<li><span class="witness-time">' + esc(e.time || e.period_label || '') + '</span>' +
+        const recaps = d.witness_recaps || [];
+        wWitnessRecap.innerHTML = recaps.length
+            ? recaps.slice().reverse().map(e =>
+                '<li><span class="witness-time">' + esc(e.period_label || '') +
+                (e.ai ? '' : ' · auto') + '</span>' +
                 '<span class="witness-text">' + esc(String(e.text || '')) + '</span></li>'
             ).join('')
-            : '<li style="color:var(--muted)">no witness activity in the last hour</li>';
+            : '<li style="color:var(--muted)">no AI recap yet — updates every ~5 min when people, sounds, or sensors change</li>';
+        const activity = d.witness_activity || d.witness_logs || [];
+        wWitnessLog.innerHTML = activity.length
+            ? activity.slice().reverse().map(e =>
+                '<li><span class="witness-time">' + esc(e.time || '') + '</span>' +
+                '<span class="witness-text">' + esc(String(e.text || '')) + '</span></li>'
+            ).join('')
+            : '<li style="color:var(--muted)">no live activity in the last hour</li>';
     }
 
     async function pollRules() {

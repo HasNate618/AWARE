@@ -4,6 +4,7 @@ from aware.app.memory.witness import (
     is_ai_narrative,
     summaries_for_witness_display,
     witness_log_to_text,
+    witness_prose_from_events,
 )
 
 
@@ -87,6 +88,21 @@ def test_witness_events_for_display() -> None:
     assert rows[1]["text"] == "speech heard"
 
 
+def test_witness_prose_from_events() -> None:
+    events = [
+        _event(100.0, "detection_enter", {"label": "person"}),
+        _event(110.0, "detection_enter", {"label": "person"}),
+        _event(120.0, "sound", {"label": "speech"}),
+        _event(130.0, "sensor:distance_cm", {"value": 80.0}),
+        _event(140.0, "sensor:distance_cm", {"value": 20.0}),
+    ]
+    log = build_witness_log(events)
+    prose = witness_prose_from_events(log)
+    assert "2 people passed through" in prose
+    assert "speech was heard" in prose
+    assert "approached" in prose
+
+
 def test_summaries_for_witness_display_filters_noise() -> None:
     rows = [
         {
@@ -99,8 +115,14 @@ def test_summaries_for_witness_display_filters_noise() -> None:
             "period_end": 300.0,
             "narrative": "A person entered and speech was heard near the booth.",
         },
+        {
+            "period_start": 300.0,
+            "period_end": 400.0,
+            "narrative": "12:00:01 person entered frame\n12:00:05 speech heard",
+        },
     ]
     logs = summaries_for_witness_display(rows)
-    assert len(logs) == 1
-    assert "–" in str(logs[0]["period_label"])
-    assert "person entered" in str(logs[0]["text"])
+    assert len(logs) == 2
+    assert logs[0]["ai"] is True
+    assert logs[1]["ai"] is False
+    assert "passed through" in str(logs[1]["text"])

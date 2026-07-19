@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from aware.app.action.bt_speaker import ensure_bt_speaker_connected
 from aware.app.action.speaker import speak as speak_text
 from aware.app.config import Settings, get_settings, setup_logging
 from aware.app.core.event_bus import EventBus
@@ -29,6 +30,7 @@ from aware.app.memory.summarizer import MemorySummarizer
 from aware.app.memory.witness import (
     WITNESS_SOUND_LABELS,
     build_witness_log,
+    summaries_for_witness_display,
     witness_events_for_display,
 )
 from aware.app.parser.nl_parser import parse_rule
@@ -213,6 +215,24 @@ def action_handler_factory(db: EventDB, bus: EventBus, actuators: ActuatorBus | 
     return handle_action
 
 
+async def bt_reconnect_loop(settings: Settings) -> None:
+    """Keep trying to connect the paired BT speaker when it drops."""
+    mac = settings.bt_speaker_mac.strip()
+    if not mac:
+        return
+    interval = max(settings.bt_reconnect_interval, 15.0)
+    logger.info("BT speaker reconnect loop started (every %.0fs)", interval)
+    try:
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                await asyncio.to_thread(ensure_bt_speaker_connected, mac)
+            except Exception:
+                logger.debug("BT reconnect attempt failed", exc_info=True)
+    except asyncio.CancelledError:
+        logger.info("BT speaker reconnect loop stopped")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     settings = get_settings()
@@ -316,6 +336,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     sensor_task = asyncio.create_task(
         sensor_loop(sensor_bus, bus, db, settings, sensor_cache),
     )
+    bt_task = asyncio.create_task(bt_reconnect_loop(settings))
     logger.info("AWARE started on %s:%d", settings.host, settings.port)
 
     yield
@@ -325,6 +346,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     loop.stop()
     camera_task.cancel()
     sensor_task.cancel()
+    bt_task.cancel()
     loop_task.cancel()
     await engine.stop()
     await store.close()
@@ -475,7 +497,9 @@ async def venue_stats(window: int = 3600) -> dict[str, object]:
     sound_total = sum(sounds.values())
 
     window_events = await db.query_range(start, now)
-    witness_logs = witness_events_for_display(build_witness_log(window_events))
+    summaries = await db.get_summaries(since=start, until=now)
+    witness_recaps = summaries_for_witness_display(summaries)
+    witness_activity = witness_events_for_display(build_witness_log(window_events))
 
     return {
         "timestamp": now,
@@ -488,7 +512,9 @@ async def venue_stats(window: int = 3600) -> dict[str, object]:
         "detections": detections,
         "sounds": sounds,
         "sound_total": sound_total,
-        "witness_logs": witness_logs,
+        "witness_recaps": witness_recaps,
+        "witness_activity": witness_activity,
+        "witness_logs": witness_activity,
         "camera_source": snap.source,
     }
 

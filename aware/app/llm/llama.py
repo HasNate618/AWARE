@@ -175,15 +175,25 @@ class LlamaLLM:
     async def summarize_period(self, digest_text: str) -> str:
         start = time.monotonic()
         prompt = (
-            "Summarize this witness log in 1-2 short sentences. "
-            "Only mention people entering, sounds heard, and sensor changes listed. "
-            "Do not invent events.\n\n"
+            "You are AWARE, an on-device venue witness. "
+            "Write 2-3 sentences of observational prose about what happened. "
+            "Infer reasonable context from sensor trends (e.g. distance dropping means "
+            "someone approached) but only use events in the log. "
+            "No meta-commentary, no questions, no tables, no bullet lists.\n\n"
+            "Example log:\n"
+            "12:04:01 person entered frame\n"
+            "12:04:08 speech heard\n"
+            "12:04:12 distance 80.0cm → 20.0cm (-60.0cm)\n\n"
+            "Example summary:\n"
+            "Someone entered the booth around 12:04 and spoke briefly while "
+            "approaching from about 80 cm away.\n\n"
             f"Log:\n{digest_text}\n\nSummary:"
         )
         payload = {
             "prompt": prompt,
-            "temperature": 0.2,
-            "n_predict": 128,
+            "temperature": 0.15,
+            "n_predict": 120,
+            "stop": ["\n\n", "Task", "Next Question", "Conclusion:", "Example"],
         }
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:

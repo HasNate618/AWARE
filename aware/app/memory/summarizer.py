@@ -8,7 +8,12 @@ from dataclasses import dataclass
 from aware.app.llm.interface import LLMClient
 from aware.app.memory.db import EventDB
 from aware.app.memory.digest import build_digest, digest_to_json
-from aware.app.memory.witness import build_witness_log, is_ai_narrative, witness_log_to_text
+from aware.app.memory.witness import (
+    build_witness_log,
+    is_ai_narrative,
+    witness_log_to_text,
+    witness_prose_from_events,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +80,7 @@ class MemorySummarizer:
 
         witness_text = witness_log_to_text(witness_events)
         digest = build_digest(events)
-        narrative = witness_text
+        narrative = witness_prose_from_events(witness_events) or witness_text
         used_llm = False
 
         if self._llm_lock.locked():
