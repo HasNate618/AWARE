@@ -26,18 +26,18 @@ float movement_intensity() {
 }
 
 void setup() {
+    Bridge.begin(115200);
+    Bridge.provide_safe("read_temp", read_temp);
+    Bridge.provide_safe("read_distance", read_distance);
+    Bridge.provide_safe("accel_x", accel_x);
+    Bridge.provide_safe("accel_y", accel_y);
+    Bridge.provide_safe("accel_z", accel_z);
+    Bridge.provide_safe("movement_intensity", movement_intensity);
+
     Modulino.begin(Wire1);
     thermo.begin();
     has_dist = dist.begin();
     move.begin();
-
-    Bridge.begin(115200);
-    Bridge.provide("read_temp", read_temp);
-    Bridge.provide("read_distance", read_distance);
-    Bridge.provide("accel_x", accel_x);
-    Bridge.provide("accel_y", accel_y);
-    Bridge.provide("accel_z", accel_z);
-    Bridge.provide("movement_intensity", movement_intensity);
 }
 
 void loop() {

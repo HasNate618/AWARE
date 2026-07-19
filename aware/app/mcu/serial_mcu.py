@@ -12,7 +12,7 @@ from aware.app.mcu.bus import SensorReading
 logger = logging.getLogger(__name__)
 
 DEFAULT_SOCKET_PATH = "/var/run/arduino-router.sock"
-RPC_TIMEOUT = 1.0
+RPC_TIMEOUT = 3.0
 
 SENSOR_DEFAULTS: dict[str, float] = {
     "temperature_c": 22.0,
@@ -103,8 +103,8 @@ class SerialMCU:
 
         try:
             s = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
-            s.settimeout(RPC_TIMEOUT)
             s.connect(self.socket_path)
+            s.setblocking(False)
             self._sock = s
             self._connected = True
             logger.info("Router MCU on %s", self.socket_path)
@@ -125,32 +125,51 @@ class SerialMCU:
             return None
         async with self._rpc_lock:
             self._msgid += 1
-            req = [0, self._msgid, method, list(args)]
+            msgid = self._msgid
+            req = [0, msgid, method, list(args)]
             loop = asyncio.get_running_loop()
+            deadline = loop.time() + RPC_TIMEOUT
             try:
                 await loop.sock_sendall(self._sock, _pack_msg(req))
                 unpacker = msgpack.Unpacker(strict_map_key=False)
-                while True:
+                while loop.time() < deadline:
                     try:
                         resp = next(unpacker)
-                        break
                     except StopIteration:
-                        chunk = await asyncio.wait_for(
-                            loop.sock_recv(self._sock, 4096),
-                            timeout=RPC_TIMEOUT,
-                        )
+                        remaining = deadline - loop.time()
+                        if remaining <= 0:
+                            break
+                        try:
+                            chunk = await asyncio.wait_for(
+                                loop.sock_recv(self._sock, 4096),
+                                timeout=remaining,
+                            )
+                        except TimeoutError:
+                            break
                         if not chunk:
+                            logger.warning("RPC %s: router closed connection", method)
+                            self._connected = False
                             return None
                         unpacker.feed(chunk)
-                if isinstance(resp, list) and len(resp) >= 4:
+                        continue
+                    if not isinstance(resp, list) or len(resp) < 2:
+                        continue
+                    if resp[0] != 1:
+                        continue
+                    if resp[1] != msgid:
+                        continue
+                    if len(resp) < 4:
+                        return None
                     error: object = resp[2]
                     result: object = resp[3]
                     if error is not None:
+                        logger.warning("RPC %s error: %s", method, error)
                         return None
                     return result
+                logger.warning("RPC %s timed out after %.1fs", method, RPC_TIMEOUT)
                 return None
             except Exception:
-                logger.debug("RPC call %s failed", method, exc_info=True)
+                logger.warning("RPC call %s failed", method, exc_info=True)
                 return None
 
     async def read_all(self) -> list[SensorReading]:
