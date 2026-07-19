@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import time
 from collections import deque
 from typing import Any
@@ -14,19 +15,86 @@ logger = logging.getLogger(__name__)
 
 # COCO class names (index → name)
 _COCO_NAMES = [
-    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train",
-    "truck", "boat", "traffic light", "fire hydrant", "stop sign",
-    "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep",
-    "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella",
-    "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard",
-    "sports ball", "kite", "baseball bat", "baseball glove", "skateboard",
-    "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork",
-    "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
-    "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair",
-    "couch", "potted plant", "bed", "dining table", "toilet", "tv",
-    "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave",
-    "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase",
-    "scissors", "teddy bear", "hair drier", "toothbrush",
+    "person",
+    "bicycle",
+    "car",
+    "motorcycle",
+    "airplane",
+    "bus",
+    "train",
+    "truck",
+    "boat",
+    "traffic light",
+    "fire hydrant",
+    "stop sign",
+    "parking meter",
+    "bench",
+    "bird",
+    "cat",
+    "dog",
+    "horse",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra",
+    "giraffe",
+    "backpack",
+    "umbrella",
+    "handbag",
+    "tie",
+    "suitcase",
+    "frisbee",
+    "skis",
+    "snowboard",
+    "sports ball",
+    "kite",
+    "baseball bat",
+    "baseball glove",
+    "skateboard",
+    "surfboard",
+    "tennis racket",
+    "bottle",
+    "wine glass",
+    "cup",
+    "fork",
+    "knife",
+    "spoon",
+    "bowl",
+    "banana",
+    "apple",
+    "sandwich",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza",
+    "donut",
+    "cake",
+    "chair",
+    "couch",
+    "potted plant",
+    "bed",
+    "dining table",
+    "toilet",
+    "tv",
+    "laptop",
+    "mouse",
+    "remote",
+    "keyboard",
+    "cell phone",
+    "microwave",
+    "oven",
+    "toaster",
+    "sink",
+    "refrigerator",
+    "book",
+    "clock",
+    "vase",
+    "scissors",
+    "teddy bear",
+    "hair drier",
+    "toothbrush",
 ]
 
 # Map COCO labels to AWARE vocabulary
@@ -100,6 +168,9 @@ class YOLOCamera:
         self._cap: Any = None
         self._session: Any = None
         self._last_frame: np.ndarray | None = None
+        self._latest_frame: np.ndarray | None = None
+        self._frame_lock = threading.Lock()
+        self._frame_thread: threading.Thread | None = None
         self._last_snapshot: PerceptionSnapshot = PerceptionSnapshot(
             detections=[], sounds=[], source="yolo_unavailable", timestamp=time.time()
         )
@@ -129,6 +200,10 @@ class YOLOCamera:
             self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
             self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             logger.info("YOLO camera started")
+
+            # Start dedicated frame reader thread
+            self._frame_thread = threading.Thread(target=self._read_frames, daemon=True)
+            self._frame_thread.start()
         except ImportError as e:
             logger.error("Missing dependency: %s — falling back to unavailable", e)
         except Exception:
@@ -146,6 +221,9 @@ class YOLOCamera:
 
     async def stop(self) -> None:
         self._running = False
+        if self._frame_thread is not None:
+            self._frame_thread.join(timeout=1.0)
+            self._frame_thread = None
         if self._cap is not None:
             self._cap.release()
             self._cap = None
@@ -172,12 +250,15 @@ class YOLOCamera:
                 # Label
                 label = f"{det.label} {det.confidence:.0%}"
                 (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(
-                    frame, (x1, y1 - th - 8), (x1 + tw + 4, y1), (0, 255, 136), -1
-                )
+                cv2.rectangle(frame, (x1, y1 - th - 8), (x1 + tw + 4, y1), (0, 255, 136), -1)
                 cv2.putText(
-                    frame, label, (x1 + 2, y1 - 4),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1,
+                    frame,
+                    label,
+                    (x1 + 2, y1 - 4),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 0, 0),
+                    1,
                 )
 
             # Encode to JPEG
@@ -193,6 +274,16 @@ class YOLOCamera:
         items = list(self._detection_log)
         return items[-limit:]
 
+    def _read_frames(self) -> None:
+        """Continuously read frames from camera in dedicated thread."""
+        while self._running and self._cap is not None:
+            ret, frame = self._cap.read()
+            if ret and frame is not None:
+                with self._frame_lock:
+                    self._latest_frame = frame
+            else:
+                time.sleep(0.01)
+
     async def run_inference_loop(self) -> None:
         """Background loop: capture frame, run YOLO, store snapshot."""
         while self._running:
@@ -205,12 +296,14 @@ class YOLOCamera:
                 # Log detections with timestamps
                 if snapshot.detections:
                     for det in snapshot.detections:
-                        self._detection_log.append({
-                            "label": det.label,
-                            "confidence": det.confidence,
-                            "bbox": det.bbox,
-                            "timestamp": snapshot.timestamp,
-                        })
+                        self._detection_log.append(
+                            {
+                                "label": det.label,
+                                "confidence": det.confidence,
+                                "bbox": det.bbox,
+                                "timestamp": snapshot.timestamp,
+                            }
+                        )
             except Exception:
                 logger.exception("YOLO inference error")
             await asyncio.sleep(self.inference_interval)
@@ -218,11 +311,12 @@ class YOLOCamera:
     def _infer(self) -> PerceptionSnapshot:
         import cv2
 
-        assert self._cap is not None
         assert self._session is not None
 
-        ret, frame = self._cap.read()
-        if not ret or frame is None:
+        # Grab latest frame from reader thread
+        with self._frame_lock:
+            frame = self._latest_frame
+        if frame is None:
             return PerceptionSnapshot(
                 detections=[], sounds=[], source="yolo", timestamp=time.time()
             )
