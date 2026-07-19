@@ -4,7 +4,7 @@ import re
 import time
 from datetime import datetime
 
-from aware.app.memory.digest import build_digest, digest_to_text
+from aware.app.memory.witness import build_witness_log
 
 _TIME_PATTERNS: list[tuple[re.Pattern[str], object]] = [
     (re.compile(r"last\s+(\d+)\s+minutes?", re.I), lambda m, now: int(m.group(1)) * 60),
@@ -72,24 +72,10 @@ def _summary_lines(summaries: list[dict[str, object]]) -> list[str]:
     lines: list[str] = []
     for summary in summaries:
         narrative = str(summary.get("narrative", "")).strip()
-        if narrative:
-            lines.append(narrative)
+        if not narrative or " | " in narrative or "accel_" in narrative:
+            continue
+        lines.append(narrative)
     return lines
-
-
-def _notable_event_line(event: dict[str, object]) -> str | None:
-    topic = str(event["topic"])
-    data = event.get("data", {})
-    if not isinstance(data, dict):
-        return None
-    ts = datetime.fromtimestamp(float(str(event["timestamp"]))).strftime("%H:%M:%S")
-    if topic == "detection_enter":
-        return f"{ts} {data.get('label', 'object')} entered"
-    if topic == "detection_exit":
-        return f"{ts} {data.get('label', 'object')} exited"
-    if topic == "action_executed":
-        return f"{ts} {data.get('message', 'action executed')}"
-    return None
 
 
 def build_memory_context(
@@ -113,23 +99,35 @@ def build_memory_context(
         default=window_start,
     )
     tail_events = [e for e in events if float(str(e["timestamp"])) >= last_summary_end]
-    tail_digest = build_digest(tail_events)
-    if tail_digest is not None:
-        sections.append(f"Recent activity: {digest_to_text(tail_digest)}")
+    witness_tail = build_witness_log(tail_events)
+    if witness_tail:
+        sections.append("Recent witness log:")
+        sections.extend(e.line for e in witness_tail[-30:])
 
-    notable = [line for e in events if (line := _notable_event_line(e)) is not None]
-    if notable:
-        sections.append("Notable events:")
-        sections.extend(notable[-20:])
+    witness_all = build_witness_log(events)
+    if witness_all and not witness_tail:
+        sections.append("Witness log:")
+        sections.extend(e.line for e in witness_all[-40:])
 
     while sections and sum(len(s) + 1 for s in sections) > max_chars:
         if len(sections) <= 2:
             sections[1] = sections[1][: max(0, max_chars - len(sections[0]) - 1)]
             break
-        # Drop oldest summary/notable content first, keep header + recent tail
         if len(sections) > 2:
             sections.pop(2)
         else:
             break
 
     return "\n".join(sections)
+
+
+def digest_fallback_answer(context: str, question: str) -> str:
+    """Return a useful answer from the activity log when the LLM is unavailable."""
+    body = context.strip()
+    if not body:
+        return "No activity was logged for that time period."
+    return (
+        "The on-device language model did not respond in time. "
+        "Here is the activity log for your question:\n\n"
+        f"{body}"
+    )

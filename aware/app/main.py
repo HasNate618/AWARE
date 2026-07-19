@@ -26,6 +26,7 @@ from aware.app.memory.db import EventDB
 from aware.app.memory.query import answer_question
 from aware.app.memory.sensors import should_log_sensor
 from aware.app.memory.summarizer import MemorySummarizer
+from aware.app.memory.witness import WITNESS_SOUND_LABELS, summaries_for_witness_display
 from aware.app.parser.nl_parser import parse_rule
 from aware.app.perception.interface import PerceptionSnapshot, PerceptionSource, SensorCache
 from aware.app.perception.mock_camera import MockCamera
@@ -300,6 +301,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
             llm,
             interval_seconds=float(settings.memory_summary_interval),
             llm_lock=llm_lock,
+            llm_timeout=min(settings.llm_timeout, 120.0),
         )
         summarizer_task = asyncio.create_task(summarizer.run())
 
@@ -444,6 +446,47 @@ async def get_sounds(limit: int = 50) -> list[dict[str, object]]:
     if isinstance(mic, YAMNetMic):
         return mic.get_sound_log(limit)
     return []
+
+
+@app.get("/api/venue/stats")
+async def venue_stats(window: int = 3600) -> dict[str, object]:
+    """Witness counters and AI-generated log entries for the venue panel."""
+    db: EventDB = app.state.db
+    camera: PerceptionSource = app.state.camera
+
+    now = time.time()
+    start = now - window
+    snap = await camera.snapshot()
+    in_frame: dict[str, int] = {}
+    for det in snap.detections:
+        if det.label != "person":
+            continue
+        in_frame[det.label] = in_frame.get(det.label, 0) + 1
+
+    detections = await db.count_labels_in_range(start, now, "detection_enter")
+    sounds = await db.count_labels_in_range(start, now, "sound")
+    detections = {k: v for k, v in detections.items() if k == "person"}
+    sounds = {k: v for k, v in sounds.items() if k in WITNESS_SOUND_LABELS}
+    people_passed = detections.get("person", 0)
+    sound_total = sum(sounds.values())
+
+    summaries = await db.get_summaries(since=start, until=now)
+    witness_logs = summaries_for_witness_display(summaries)
+
+    return {
+        "timestamp": now,
+        "window_seconds": window,
+        "window_start": start,
+        "window_end": now,
+        "in_frame": in_frame,
+        "people_in_frame": in_frame.get("person", 0),
+        "people_passed": people_passed,
+        "detections": detections,
+        "sounds": sounds,
+        "sound_total": sound_total,
+        "witness_logs": witness_logs,
+        "camera_source": snap.source,
+    }
 
 
 @app.get("/events")

@@ -219,6 +219,38 @@ class EventDB:
         row = await cursor.fetchone()
         return int(row[0]) if row else 0
 
+    async def count_labels_in_range(
+        self,
+        start: float,
+        end: float,
+        topic: str,
+    ) -> dict[str, int]:
+        """Count events by data.label for a topic in a time window."""
+        if not self._db:
+            raise RuntimeError("Database not opened")
+        cursor = await self._db.execute(
+            """
+            SELECT data FROM events
+            WHERE timestamp >= ? AND timestamp < ? AND topic = ?
+            """,
+            (start, end, topic),
+        )
+        rows = await cursor.fetchall()
+        counts: dict[str, int] = {}
+        for row in rows:
+            raw = row[0]
+            if not isinstance(raw, str):
+                continue
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(data, dict):
+                continue
+            label = str(data.get("label", "unknown"))
+            counts[label] = counts.get(label, 0) + 1
+        return counts
+
     async def last_summary_end(self) -> float | None:
         if not self._db:
             raise RuntimeError("Database not opened")

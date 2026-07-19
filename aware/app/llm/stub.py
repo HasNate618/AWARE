@@ -51,7 +51,11 @@ class StubLLM:
         return f"[stub] Based on the log: {context[:200]}...\n\nQ: {question}"
 
     async def summarize_period(self, digest_text: str) -> str:
-        return digest_text
+        if "person entered" in digest_text:
+            return "Someone entered the camera frame during this period."
+        if "heard" in digest_text:
+            return "Sounds were detected in the space during this period."
+        return "No notable witness activity during this period."
 
 
 def _slugify(text: str) -> str:

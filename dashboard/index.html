@@ -65,6 +65,24 @@
         .src-line { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
         .src-line.live { color: var(--accent); }
 
+        .witness { margin-bottom: 10px; }
+        .witness-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        @media (max-width: 700px) { .witness-grid { grid-template-columns: 1fr; } }
+        .witness-stat {
+            text-align: center; padding: 14px 8px; border-radius: 10px;
+            background: rgba(0, 255, 136, 0.04); border: 1px solid var(--border);
+        }
+        .witness-stat.hero { border-color: rgba(0, 255, 136, 0.35); background: rgba(0, 255, 136, 0.08); }
+        .witness-stat .lbl { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+        .witness-stat .num { font-size: 36px; font-weight: 700; color: var(--accent); line-height: 1.1; margin: 4px 0; }
+        .witness-stat .unit { font-size: 10px; color: var(--muted); }
+        .witness-log { max-height: 200px; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+        .witness-log li { display: block; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .witness-log li:last-child { border-bottom: none; }
+        .witness-log .witness-time { font-size: 9px; letter-spacing: 0.08em; color: var(--muted); display: block; margin-bottom: 4px; }
+        .witness-log .witness-text { font-size: 12px; color: #ccc; line-height: 1.45; }
+        .witness-recap-lbl { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-top: 8px; margin-bottom: 4px; }
+
         .wins { display: flex; gap: 4px; margin-bottom: 8px; }
         .wins button { background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 3px 8px; font-size: 10px; cursor: pointer; font-family: inherit; }
         .wins button.on { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
@@ -138,6 +156,15 @@ function showDash() {
     app.innerHTML =
         '<div class="shell">' +
         '<header class="topbar"><div class="brand">A.W.A.R.E.</div><span class="pill" id="pConn">offline</span><span class="pill" id="pCam">camera</span><span class="pill" id="pMcu">sensors</span><span class="pill" id="pLlm">llm</span><div class="topbar-right"><button class="logout" id="out">logout</button></div></header>' +
+        '<div class="panel witness"><div class="panel-title">Witness</div>' +
+            '<div class="witness-grid">' +
+                '<div class="witness-stat hero"><div class="lbl">In frame now</div><div class="num" id="wPeopleFrame">0</div><div class="unit">people</div></div>' +
+                '<div class="witness-stat"><div class="lbl">Passed by</div><div class="num" id="wPeoplePassed">0</div><div class="unit" id="wWindowLbl">last hour</div></div>' +
+                '<div class="witness-stat"><div class="lbl">Sounds heard</div><div class="num" id="wSoundTotal">0</div><div class="unit" id="wSoundBreakdown">—</div></div>' +
+            '</div>' +
+            '<div class="witness-recap-lbl">Witness log</div>' +
+            '<ul class="list witness-log" id="wWitnessLog"><li style="color:var(--muted)">waiting for AI entries…</li></ul>' +
+        '</div>' +
         '<div class="layout">' +
             '<div class="panel"><div class="panel-title">Camera</div><div class="video"><img id="vid" src="' + API + '/api/video"><span class="video-tag" id="vtag">...</span></div></div>' +
             '<div class="panel"><div class="panel-title">Sensors</div>' +
@@ -174,6 +201,7 @@ function init() {
     const ts = t => t ? new Date(t * 1000).toLocaleTimeString() : '--';
     const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
     const pc = c => Math.round(c * 100);
+    const humanLbl = s => String(s).replace(/_/g, ' ');
 
     const WINS = [{ l: '30s', s: 30 }, { l: '2m', s: 120 }, { l: '5m', s: 300 }];
     let winSec = 30;
@@ -276,6 +304,28 @@ function init() {
         pCam.className = 'pill ' + (String(d.source).includes('yolo') ? 'ok' : 'warn');
     }
 
+    async function pollVenue() {
+        const d = await get('/api/venue/stats?window=3600');
+        if (!d) return;
+        wPeopleFrame.textContent = String(d.people_in_frame ?? 0);
+        wPeoplePassed.textContent = String(d.people_passed ?? 0);
+        wSoundTotal.textContent = String(d.sound_total ?? 0);
+        const mins = Math.round((d.window_seconds || 3600) / 60);
+        wWindowLbl.textContent = 'last ' + (mins >= 60 ? 'hour' : mins + ' min');
+        const snd = d.sounds || {};
+        const keys = Object.keys(snd);
+        wSoundBreakdown.textContent = keys.length
+            ? keys.slice(0, 3).map(k => humanLbl(k) + ' ×' + snd[k]).join(' · ')
+            : 'listening…';
+        const logs = d.witness_logs || [];
+        wWitnessLog.innerHTML = logs.length
+            ? logs.slice().reverse().map(e =>
+                '<li><span class="witness-time">' + esc(e.period_label || '') + '</span>' +
+                '<span class="witness-text">' + esc(String(e.text || '')) + '</span></li>'
+            ).join('')
+            : '<li style="color:var(--muted)">no AI witness entries yet — updates every ~5 min when people, sounds, or sensor changes occur</li>';
+    }
+
     async function pollRules() {
         const d = await get('/rules');
         const existing = window._wfExpanded || {};
@@ -364,7 +414,7 @@ function init() {
     vid.onerror = function() { this.src = API + '/api/video?' + Date.now(); };
 
     async function tick() {
-        await Promise.all([pollSensors(), pollSnap(), pollAct(), pollLogs()]);
+        await Promise.all([pollSensors(), pollSnap(), pollVenue(), pollAct(), pollLogs()]);
     }
 
     seedCharts().then(() => { paint(); tick(); pollRules(); pollLlm(); });

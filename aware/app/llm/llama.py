@@ -175,8 +175,9 @@ class LlamaLLM:
     async def summarize_period(self, digest_text: str) -> str:
         start = time.monotonic()
         prompt = (
-            "Summarize this activity log in 2-3 sentences. "
-            "Include specific times and counts. Only state facts from the log.\n\n"
+            "Summarize this witness log in 1-2 short sentences. "
+            "Only mention people entering, sounds heard, and sensor changes listed. "
+            "Do not invent events.\n\n"
             f"Log:\n{digest_text}\n\nSummary:"
         )
         payload = {

@@ -7,7 +7,8 @@ from dataclasses import dataclass
 
 from aware.app.llm.interface import LLMClient
 from aware.app.memory.db import EventDB
-from aware.app.memory.digest import build_digest, digest_to_json, digest_to_text
+from aware.app.memory.digest import build_digest, digest_to_json
+from aware.app.memory.witness import build_witness_log, witness_log_to_text
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +31,13 @@ class MemorySummarizer:
         llm: LLMClient,
         interval_seconds: float = 300.0,
         llm_lock: asyncio.Lock | None = None,
+        llm_timeout: float = 120.0,
     ) -> None:
         self._db = db
         self._llm = llm
         self._interval = interval_seconds
         self._llm_lock = llm_lock or asyncio.Lock()
+        self._llm_timeout = llm_timeout
 
     async def run(self) -> None:
         logger.info("Memory summarizer started (interval=%ds)", int(self._interval))
@@ -66,29 +69,31 @@ class MemorySummarizer:
         if not events:
             return None
 
-        digest = build_digest(events)
-        if digest is None:
+        witness_events = build_witness_log(events)
+        if not witness_events:
             return None
 
-        digest_text = digest_to_text(digest)
-        narrative = digest_text
+        witness_text = witness_log_to_text(witness_events)
+        digest = build_digest(events)
+        narrative = witness_text
         used_llm = False
 
         if self._llm_lock.locked():
-            logger.warning("LLM busy — storing digest-only summary")
+            logger.warning("LLM busy — storing witness log without narration")
         else:
             try:
-                async with asyncio.timeout(60):
+                async with asyncio.timeout(self._llm_timeout):
                     async with self._llm_lock:
-                        narrative = await self._llm.summarize_period(digest_text)
+                        narrative = await self._llm.summarize_period(witness_text)
                 used_llm = True
             except Exception:
-                logger.exception("LLM summarization failed — using digest fallback")
+                logger.exception("LLM summarization failed — using witness log fallback")
 
+        digest_json = digest_to_json(digest) if digest is not None else witness_text
         await self._db.store_summary(
             last_end,
             now,
-            digest_to_json(digest),
+            digest_json,
             narrative,
             len(events),
         )
