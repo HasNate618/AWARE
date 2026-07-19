@@ -9,8 +9,10 @@ from aware.app.llm.interface import LLMClient
 from aware.app.memory.db import EventDB
 from aware.app.memory.digest import build_digest, digest_to_json
 from aware.app.memory.witness import (
+    build_witness_brief,
     build_witness_log,
     is_ai_narrative,
+    witness_brief_to_text,
     witness_log_to_text,
     witness_prose_from_events,
 )
@@ -80,7 +82,13 @@ class MemorySummarizer:
 
         witness_text = witness_log_to_text(witness_events)
         digest = build_digest(events)
-        narrative = witness_prose_from_events(witness_events) or witness_text
+        brief = build_witness_brief(witness_events, last_end, now)
+        brief_text = witness_brief_to_text(brief) if brief else witness_text
+        narrative = witness_prose_from_events(
+            witness_events,
+            period_start=last_end,
+            period_end=now,
+        ) or witness_text
         used_llm = False
 
         if self._llm_lock.locked():
@@ -89,12 +97,12 @@ class MemorySummarizer:
             try:
                 async with asyncio.timeout(self._llm_timeout):
                     async with self._llm_lock:
-                        llm_text = await self._llm.summarize_period(witness_text)
+                        llm_text = await self._llm.summarize_period(brief_text)
                 if is_ai_narrative(llm_text):
                     narrative = llm_text
                     used_llm = True
                 else:
-                    logger.warning("LLM summary rejected — storing witness log lines")
+                    logger.warning("LLM summary rejected — using narrative fallback")
             except Exception:
                 logger.exception("LLM summarization failed — using witness log fallback")
 

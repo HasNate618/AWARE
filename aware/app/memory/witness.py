@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from aware.app.memory.sensors import SENSOR_THRESHOLDS
@@ -191,21 +191,55 @@ _SENSOR_DELTA_RE = re.compile(
     r"\((?P<delta>[+-][\d.]+)(?P=unit)?\)$"
 )
 
+_SOUND_HEARD_RE = re.compile(r"^(?P<label>.+) heard$")
 
-def witness_prose_from_events(events: list[WitnessEvent]) -> str:
-    """Context-aware template prose when the LLM is unavailable or low quality."""
+
+@dataclass
+class WitnessBrief:
+    period_label: str
+    period_minutes: int
+    visitor_times: list[float] = field(default_factory=list)
+    sounds: list[tuple[float, str]] = field(default_factory=list)
+    approaches: list[tuple[float, float, float]] = field(default_factory=list)
+    retreats: list[tuple[float, float]] = field(default_factory=list)
+    temp_shift: tuple[float, float] | None = None
+    movement_noted: bool = False
+    stop_and_talk: list[float] = field(default_factory=list)
+
+
+def _parse_event_timestamp(line: str) -> float | None:
+    match = re.match(r"^(\d{2}):(\d{2}):(\d{2}) ", line)
+    if not match:
+        return None
+    hour, minute, second = (int(match.group(i)) for i in range(1, 4))
+    now = datetime.now()
+    return datetime(now.year, now.month, now.day, hour, minute, second).timestamp()
+
+
+def build_witness_brief(
+    events: list[WitnessEvent],
+    period_start: float,
+    period_end: float,
+) -> WitnessBrief | None:
     if not events:
-        return ""
+        return None
 
-    people = sum(1 for event in events if event.kind == "person")
-    sound_counts: dict[str, int] = {}
-    sensor_notes: list[str] = []
+    brief = WitnessBrief(
+        period_label=format_period_label(period_start, period_end),
+        period_minutes=max(1, int(round((period_end - period_start) / 60))),
+    )
 
     for event in events:
+        if event.kind == "person":
+            brief.visitor_times.append(event.timestamp)
+            continue
         if event.kind == "sound":
             body = _EVENT_LINE.match(event.line)
-            label = body.group(1).removesuffix(" heard") if body else "sound"
-            sound_counts[label] = sound_counts.get(label, 0) + 1
+            if not body:
+                continue
+            heard = _SOUND_HEARD_RE.match(body.group(1))
+            label = heard.group("label") if heard else body.group(1)
+            brief.sounds.append((event.timestamp, label))
             continue
         if event.kind != "sensor":
             continue
@@ -221,71 +255,213 @@ def witness_prose_from_events(events: list[WitnessEvent]) -> str:
         delta = float(parsed.group("delta"))
         if label == "distance":
             if delta <= -15:
-                sensor_notes.append(
-                    f"someone likely approached the booth (distance fell from {prev:.0f} to {val:.0f} cm)"
-                )
+                brief.approaches.append((event.timestamp, prev, val))
             elif delta >= 15:
-                sensor_notes.append(
-                    f"movement away from the sensor (distance increased to {val:.0f} cm)"
-                )
+                brief.retreats.append((event.timestamp, val))
         elif label == "temperature" and abs(delta) >= 0.5:
-            direction = "warmed" if delta > 0 else "cooled"
-            sensor_notes.append(
-                f"the area {direction} slightly ({prev:.1f} to {val:.1f} °C)"
-            )
+            brief.temp_shift = (prev, val)
         elif label == "movement" and val >= 0.15:
-            sensor_notes.append("noticeable movement was detected on the accelerometer")
+            brief.movement_noted = True
 
-    parts: list[str] = []
-    if people == 1:
-        parts.append("Someone passed through the camera view")
-    elif people > 1:
-        parts.append(f"{people} people passed through the camera view")
+    for ts, _label in brief.sounds:
+        for vts in brief.visitor_times:
+            if abs(ts - vts) <= 25:
+                for ats, _prev, _val in brief.approaches:
+                    if abs(ts - ats) <= 30 or abs(ts - vts) <= 20:
+                        if ts not in brief.stop_and_talk:
+                            brief.stop_and_talk.append(ts)
+                        break
 
-    if sound_counts:
-        if len(sound_counts) == 1 and sum(sound_counts.values()) == 1:
-            label = next(iter(sound_counts))
-            parts.append(f"{label} was heard in the space")
+    return brief
+
+
+def witness_brief_to_text(brief: WitnessBrief) -> str:
+    """Semantic brief for the LLM — patterns, not raw event dumps."""
+    lines = [f"Period: {brief.period_label} (~{brief.period_minutes} min)"]
+
+    visitors = len(brief.visitor_times)
+    if visitors:
+        start = _fmt_clock(min(brief.visitor_times))
+        end = _fmt_clock(max(brief.visitor_times))
+        if visitors == 1:
+            lines.append(f"Traffic: one visitor at {start}")
+        elif visitors >= 6:
+            lines.append(f"Traffic: busy spell — {visitors} visitors mostly {start}–{end}")
         else:
-            bits = [
-                f"{label} ×{count}" if count > 1 else label
-                for label, count in sound_counts.items()
-            ]
-            parts.append(f"Sounds in the space included {', '.join(bits)}")
+            lines.append(f"Traffic: {visitors} visitors between {start} and {end}")
+    else:
+        lines.append("Traffic: no visitors")
 
-    if sensor_notes:
-        parts.append(sensor_notes[0])
+    if brief.sounds:
+        labels = sorted({label for _, label in brief.sounds})
+        times = ", ".join(_fmt_clock(ts) for ts, _ in brief.sounds[:4])
+        if len(brief.sounds) == 1:
+            lines.append(f"Audio: {labels[0]} at {times}")
+        else:
+            lines.append(f"Audio: {', '.join(labels)} ({len(brief.sounds)} events, e.g. {times})")
+    else:
+        lines.append("Audio: quiet")
 
-    if not parts:
+    if brief.approaches:
+        ats, prev, val = brief.approaches[0]
+        lines.append(
+            f"Proximity: approached at {_fmt_clock(ats)} ({prev:.0f}cm → {val:.0f}cm)"
+        )
+    if brief.retreats:
+        rts, val = brief.retreats[-1]
+        lines.append(f"Proximity: moved away at {_fmt_clock(rts)} (to {val:.0f}cm)")
+
+    if brief.stop_and_talk:
+        lines.append(
+            "Scene: speech overlapped with someone stopping close to the booth "
+            f"around {_fmt_clock(brief.stop_and_talk[0])}"
+        )
+    if brief.temp_shift:
+        prev, val = brief.temp_shift
+        lines.append(f"Environment: temperature {prev:.1f}°C → {val:.1f}°C")
+    if brief.movement_noted:
+        lines.append("Environment: bump or movement on the sensor module")
+
+    return "\n".join(lines)
+
+
+def witness_prose_from_brief(brief: WitnessBrief) -> str:
+    """Narrative fallback — scene description, not a tally."""
+    visitors = len(brief.visitor_times)
+    sounds = len(brief.sounds)
+    sound_labels = sorted({label for _, label in brief.sounds})
+    window = brief.period_label
+
+    if brief.stop_and_talk:
+        when = _fmt_clock(brief.stop_and_talk[0])
+        return (
+            f"Around {when}, someone lingered at the booth — speech was picked up "
+            f"as they moved in close to the sensor."
+        )
+
+    if visitors >= 8:
+        start = _fmt_clock(min(brief.visitor_times))
+        end = _fmt_clock(max(brief.visitor_times))
+        base = (
+            f"A busy stretch from {start} to {end} with steady foot traffic past the booth"
+        )
+        if sounds:
+            return f"{base}; voices were heard in the space a few times."
+        return f"{base}."
+
+    if visitors >= 3:
+        if sounds:
+            label = sound_labels[0] if len(sound_labels) == 1 else "voices"
+            return (
+                f"Several people passed through between {window} and {label} "
+                f"was heard — the booth saw regular walk-by traffic."
+            )
+        return f"Several people passed the camera during {window}, but it stayed quiet."
+
+    if visitors == 1 and sounds and brief.approaches:
+        when = _fmt_clock(brief.visitor_times[0])
+        return (
+            f"A lone visitor around {when} stopped in view, spoke briefly, "
+            f"and moved in toward the sensor."
+        )
+
+    if visitors == 1 and brief.approaches:
+        when = _fmt_clock(brief.approaches[0][0])
+        return f"Someone approached the booth around {when} without much audio activity."
+
+    if visitors == 1:
+        when = _fmt_clock(brief.visitor_times[0])
+        return f"A single visitor passed the camera around {when}."
+
+    if visitors == 2:
+        if sounds:
+            return (
+                f"A pair of visitors during {window}; "
+                f"{'speech' if 'speech' in sound_labels else sound_labels[0]} was heard."
+            )
+        return f"Two people passed by during {window}."
+
+    if sounds == 1:
+        when = _fmt_clock(brief.sounds[0][0])
+        label = brief.sounds[0][1]
+        return f"The booth was otherwise quiet — {label} was heard once around {when}."
+
+    if sounds > 1:
+        return (
+            f"Conversation or noise in the space during {window} "
+            f"({'speech' if 'speech' in sound_labels else ', '.join(sound_labels)}), "
+            f"without much camera traffic."
+        )
+
+    if brief.approaches:
+        when = _fmt_clock(brief.approaches[0][0])
+        return f"Movement near the booth around {when} — someone came in close to the sensor."
+
+    if brief.temp_shift:
+        prev, val = brief.temp_shift
+        direction = "warmed" if val > prev else "cooled"
+        return f"The space {direction} a little during {window} ({prev:.1f}°C to {val:.1f}°C)."
+
+    return ""
+
+
+def witness_prose_from_events(
+    events: list[WitnessEvent],
+    *,
+    period_start: float | None = None,
+    period_end: float | None = None,
+) -> str:
+    """Context-aware template prose when the LLM is unavailable or low quality."""
+    if not events:
         return ""
-    return ". ".join(parts) + "."
+    start = period_start if period_start is not None else events[0].timestamp
+    end = period_end if period_end is not None else events[-1].timestamp
+    brief = build_witness_brief(events, start, end)
+    if brief is None:
+        return ""
+    return witness_prose_from_brief(brief)
 
 
 def witness_prose_from_log_text(text: str) -> str:
     """Rebuild template prose from stored witness log lines."""
     events: list[WitnessEvent] = []
+    timestamps: list[float] = []
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped:
             continue
+        ts = _parse_event_timestamp(stripped) or 0.0
+        if ts:
+            timestamps.append(ts)
         if "person entered frame" in stripped:
             kind = "person"
         elif " heard" in stripped:
             kind = "sound"
         else:
             kind = "sensor"
-        events.append(WitnessEvent(timestamp=0.0, line=stripped, kind=kind))
-    return witness_prose_from_events(events)
+        events.append(WitnessEvent(timestamp=ts, line=stripped, kind=kind))
+    if not events:
+        return ""
+    start = min(timestamps) if timestamps else 0.0
+    end = max(timestamps) if timestamps else start + 300
+    return witness_prose_from_events(events, period_start=start, period_end=end)
 
 
 def _is_template_prose(text: str) -> bool:
     markers = (
-        "passed through the camera view",
-        "was heard in the space",
-        "Sounds in the space included",
-        "likely approached the booth",
-        "movement away from the sensor",
-        "noticeable movement was detected",
+        "passed the camera",
+        "passed through",
+        "passed by during",
+        "foot traffic",
+        "busy stretch",
+        "lingered at the booth",
+        "lone visitor",
+        "booth was otherwise quiet",
+        "moved in toward the sensor",
+        "moved in close",
+        "walk-by traffic",
+        "The space warmed",
+        "The space cooled",
     )
     return any(marker in text for marker in markers)
 

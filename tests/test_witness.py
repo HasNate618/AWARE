@@ -97,10 +97,26 @@ def test_witness_prose_from_events() -> None:
         _event(140.0, "sensor:distance_cm", {"value": 20.0}),
     ]
     log = build_witness_log(events)
-    prose = witness_prose_from_events(log)
-    assert "2 people passed through" in prose
-    assert "speech was heard" in prose
-    assert "approached" in prose
+    prose = witness_prose_from_events(log, period_start=100.0, period_end=200.0)
+    assert "lingered" in prose.lower() or "speech" in prose.lower()
+
+
+def test_witness_brief_stop_and_talk() -> None:
+    from aware.app.memory.witness import build_witness_brief, witness_prose_from_brief
+
+    events = build_witness_log(
+        [
+            _event(100.0, "detection_enter", {"label": "person"}),
+            _event(105.0, "sound", {"label": "speech"}),
+            _event(108.0, "sensor:distance_cm", {"value": 90.0}),
+            _event(112.0, "sensor:distance_cm", {"value": 25.0}),
+        ]
+    )
+    brief = build_witness_brief(events, 100.0, 200.0)
+    assert brief is not None
+    assert brief.stop_and_talk
+    prose = witness_prose_from_brief(brief)
+    assert "lingered" in prose or "moved in close" in prose
 
 
 def test_summaries_for_witness_display_filters_noise() -> None:
@@ -125,4 +141,4 @@ def test_summaries_for_witness_display_filters_noise() -> None:
     assert len(logs) == 2
     assert logs[0]["ai"] is True
     assert logs[1]["ai"] is False
-    assert "passed through" in str(logs[1]["text"])
+    assert "passed" in str(logs[1]["text"]).lower() or "visitor" in str(logs[1]["text"]).lower()

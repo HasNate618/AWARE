@@ -175,25 +175,28 @@ class LlamaLLM:
     async def summarize_period(self, digest_text: str) -> str:
         start = time.monotonic()
         prompt = (
-            "You are AWARE, an on-device venue witness. "
-            "Write 2-3 sentences of observational prose about what happened. "
-            "Infer reasonable context from sensor trends (e.g. distance dropping means "
-            "someone approached) but only use events in the log. "
-            "No meta-commentary, no questions, no tables, no bullet lists.\n\n"
-            "Example log:\n"
-            "12:04:01 person entered frame\n"
-            "12:04:08 speech heard\n"
-            "12:04:12 distance 80.0cm → 20.0cm (-60.0cm)\n\n"
-            "Example summary:\n"
-            "Someone entered the booth around 12:04 and spoke briefly while "
-            "approaching from about 80 cm away.\n\n"
-            f"Log:\n{digest_text}\n\nSummary:"
+            "You are AWARE, narrating a hackathon booth like a calm security witness. "
+            "Turn the scene brief into 2 short sentences a human would say aloud. "
+            "Describe what it felt like — who stopped, who passed by, what was heard — "
+            "not a list of counts or sensor numbers. "
+            "You may infer 'someone lingered' or 'steady foot traffic' from the brief. "
+            "Do not mention 'log', 'brief', 'sensor', or 'detection'. "
+            "No questions, tables, or bullet lists.\n\n"
+            "Brief:\n"
+            "Period: 05:02–05:12 (~10 min)\n"
+            "Traffic: busy spell — 9 visitors mostly 05:03–05:08\n"
+            "Audio: speech (3 events)\n"
+            "Scene: speech overlapped with someone stopping close to the booth around 05:04\n\n"
+            "Narration:\n"
+            "A busy few minutes around five o'clock — several people walked past the booth "
+            "and at least one stopped to talk near the front.\n\n"
+            f"Brief:\n{digest_text}\n\nNarration:"
         )
         payload = {
             "prompt": prompt,
-            "temperature": 0.15,
-            "n_predict": 120,
-            "stop": ["\n\n", "Task", "Next Question", "Conclusion:", "Example"],
+            "temperature": 0.2,
+            "n_predict": 100,
+            "stop": ["\n\n", "Brief:", "Task", "Next Question", "Conclusion:", "Narration:\n"],
         }
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
