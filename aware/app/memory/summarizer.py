@@ -1,0 +1,111 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from dataclasses import dataclass
+
+from aware.app.llm.interface import LLMClient
+from aware.app.memory.db import EventDB
+from aware.app.memory.digest import build_digest, digest_to_json, digest_to_text
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SummaryResult:
+    period_start: float
+    period_end: float
+    event_count: int
+    narrative: str
+    used_llm: bool
+
+
+class MemorySummarizer:
+    """Background task that compresses event windows into stored summaries."""
+
+    def __init__(
+        self,
+        db: EventDB,
+        llm: LLMClient,
+        interval_seconds: float = 300.0,
+        llm_lock: asyncio.Lock | None = None,
+    ) -> None:
+        self._db = db
+        self._llm = llm
+        self._interval = interval_seconds
+        self._llm_lock = llm_lock or asyncio.Lock()
+
+    async def run(self) -> None:
+        logger.info("Memory summarizer started (interval=%ds)", int(self._interval))
+        try:
+            while True:
+                await asyncio.sleep(self._interval)
+                try:
+                    result = await self.summarize_once()
+                    if result:
+                        logger.info(
+                            "Summary stored: %d events, llm=%s",
+                            result.event_count,
+                            result.used_llm,
+                        )
+                except Exception:
+                    logger.exception("Summarizer tick error")
+        except asyncio.CancelledError:
+            logger.info("Memory summarizer stopped")
+
+    async def summarize_once(self) -> SummaryResult | None:
+        now = time.time()
+        last_end = await self._db.last_summary_end()
+        if last_end is None:
+            last_end = now - self._interval
+        if now - last_end < self._interval * 0.9:
+            return None
+
+        events = await self._db.query_range(last_end, now)
+        if not events:
+            return None
+
+        digest = build_digest(events)
+        if digest is None:
+            return None
+
+        digest_text = digest_to_text(digest)
+        narrative = digest_text
+        used_llm = False
+
+        if self._llm_lock.locked():
+            logger.warning("LLM busy — storing digest-only summary")
+        else:
+            try:
+                async with asyncio.timeout(60):
+                    async with self._llm_lock:
+                        narrative = await self._llm.summarize_period(digest_text)
+                used_llm = True
+            except Exception:
+                logger.exception("LLM summarization failed — using digest fallback")
+
+        await self._db.store_summary(
+            last_end,
+            now,
+            digest_to_json(digest),
+            narrative,
+            len(events),
+        )
+        await self._db.log(
+            "summary_created",
+            {
+                "period_start": last_end,
+                "period_end": now,
+                "narrative": narrative[:500],
+                "event_count": len(events),
+                "used_llm": used_llm,
+            },
+        )
+        return SummaryResult(
+            period_start=last_end,
+            period_end=now,
+            event_count=len(events),
+            narrative=narrative,
+            used_llm=used_llm,
+        )
