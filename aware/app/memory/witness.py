@@ -504,6 +504,20 @@ def witness_prose_from_log_text(text: str) -> str:
     return witness_prose_from_events(events, period_start=start, period_end=end)
 
 
+def _suspect_false_quiet(narrative: str) -> bool:
+    """LLM often claims 'empty' without mentioning any real activity."""
+    lower = narrative.lower()
+    quiet = any(
+        phrase in lower
+        for phrase in ("empty", "silent", "no one", "nobody", "see no one", "quiet few")
+    )
+    mentions_facts = any(
+        word in lower
+        for word in ("heard", "speech", "sound", "voice", "visitor", "passed", "people", "talk")
+    )
+    return quiet and not mentions_facts
+
+
 def _is_template_prose(text: str) -> bool:
     markers = (
         "passed the camera",
@@ -544,7 +558,7 @@ def summaries_for_witness_display(
         if _is_template_prose(narrative):
             text = narrative
             ai = False
-        elif is_hallucinated_narrative(narrative):
+        elif is_hallucinated_narrative(narrative) or _suspect_false_quiet(narrative):
             text = witness_prose_from_log_text(narrative)
             if not text:
                 continue
