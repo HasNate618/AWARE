@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import struct
 import time
 from typing import Any
 
@@ -67,12 +66,12 @@ def _normalize_readings(readings: list[SensorReading]) -> list[SensorReading]:
 
 
 def _pack_msg(msg: list[object]) -> bytes:
-    body: bytes = msgpack.packb(msg)
-    return struct.pack(">I", len(body)) + body
+    """Encode a msgpack-rpc message for the arduino-router Unix socket."""
+    return msgpack.packb(msg)
 
 
 def _unpack_msg(data: bytes) -> object:
-    return msgpack.unpackb(data)
+    return msgpack.unpackb(data, strict_map_key=False)
 
 
 class SerialMCU:
@@ -129,14 +128,19 @@ class SerialMCU:
             loop = asyncio.get_running_loop()
             try:
                 await loop.sock_sendall(self._sock, _pack_msg(req))
-                header = await loop.sock_recv(self._sock, 4)
-                if not header or len(header) < 4:
-                    return None
-                (plen,) = struct.unpack(">I", header)
-                data = await loop.sock_recv(self._sock, plen)
-                if not data or len(data) < plen:
-                    return None
-                resp: object = _unpack_msg(data)
+                unpacker = msgpack.Unpacker(strict_map_key=False)
+                while True:
+                    try:
+                        resp = next(unpacker)
+                        break
+                    except StopIteration:
+                        chunk = await asyncio.wait_for(
+                            loop.sock_recv(self._sock, 4096),
+                            timeout=RPC_TIMEOUT,
+                        )
+                        if not chunk:
+                            return None
+                        unpacker.feed(chunk)
                 if isinstance(resp, list) and len(resp) >= 4:
                     error: object = resp[2]
                     result: object = resp[3]
@@ -177,8 +181,7 @@ class SerialMCU:
         if readings:
             return _normalize_readings(readings)
         if self._connected:
-            logger.warning("MCU connected but all sensor RPCs failed")
-            return []
+            logger.warning("MCU connected but all sensor RPCs failed — using mock fallback")
         return _normalize_readings(self._mock.read_all())
 
     async def read_sensor(self, name: str) -> SensorReading | None:
