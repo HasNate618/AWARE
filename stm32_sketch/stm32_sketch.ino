@@ -47,11 +47,10 @@ void loop() {
         cached_dist = dist.get();
     }
 
-    if (move.update()) {
-        cached_ax = move.getX();
-        cached_ay = move.getY();
-        cached_az = move.getZ();
-    }
+    move.update();
+    cached_ax = move.getX();
+    cached_ay = move.getY();
+    cached_az = move.getZ();
 
     delay(20);
 }

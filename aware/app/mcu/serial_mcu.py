@@ -18,9 +18,6 @@ RPC_TIMEOUT = 1.0
 SENSOR_DEFAULTS: dict[str, float] = {
     "temperature_c": 22.0,
     "distance_cm": 100.0,
-    "movement_intensity": 0.05,
-    "light": 500.0,
-    "vibration": 0.0,
 }
 
 
@@ -44,12 +41,28 @@ def _derive_movement_intensity(readings: list[SensorReading]) -> float | None:
 def _normalize_readings(readings: list[SensorReading]) -> list[SensorReading]:
     """Ensure movement_intensity is present and drop legacy motion key."""
     now = readings[0].timestamp if readings else time.time()
-    intensity = _derive_movement_intensity(readings)
-    filtered = [r for r in readings if r.sensor != "motion"]
-    if intensity is not None and not any(r.sensor == "movement_intensity" for r in filtered):
+    filtered = [r for r in readings if r.sensor not in ("motion", "movement_intensity")]
+    by_name = {r.sensor: r.value for r in readings}
+    ax = by_name.get("accel_x")
+    ay = by_name.get("accel_y")
+    az = by_name.get("accel_z")
+    if ax is not None and ay is not None and az is not None:
+        import math
+
+        intensity = max(0.0, math.sqrt(ax * ax + ay * ay + az * az) - 1.0)
         filtered.append(
-            SensorReading(sensor="movement_intensity", value=float(intensity), timestamp=now)
+            SensorReading(
+                sensor="movement_intensity",
+                value=round(intensity, 4),
+                timestamp=now,
+            )
         )
+    else:
+        intensity = _derive_movement_intensity(readings)
+        if intensity is not None:
+            filtered.append(
+                SensorReading(sensor="movement_intensity", value=float(intensity), timestamp=now)
+            )
     return filtered
 
 
@@ -83,6 +96,7 @@ class SerialMCU:
         self._msgid = 0
         self._connected = False
         self._mock = _MockProvider()
+        self._rpc_lock = asyncio.Lock()
 
     async def connect(self) -> None:
         import socket as _socket
@@ -109,29 +123,30 @@ class SerialMCU:
         """Send an RPC request and return the result, or None on error/timeout."""
         if not self._connected or not self._sock:
             return None
-        self._msgid += 1
-        req = [0, self._msgid, method, list(args)]
-        loop = asyncio.get_running_loop()
-        try:
-            await loop.sock_sendall(self._sock, _pack_msg(req))
-            header = await loop.sock_recv(self._sock, 4)
-            if not header or len(header) < 4:
-                return None
-            (plen,) = struct.unpack(">I", header)
-            data = await loop.sock_recv(self._sock, plen)
-            resp: object = _unpack_msg(header + data)
-            if isinstance(resp, list) and len(resp) >= 4:
-                _type: object = resp[0]
-                _msgid: object = resp[1]
-                error: object = resp[2]
-                result: object = resp[3]
-                if error is not None:
+        async with self._rpc_lock:
+            self._msgid += 1
+            req = [0, self._msgid, method, list(args)]
+            loop = asyncio.get_running_loop()
+            try:
+                await loop.sock_sendall(self._sock, _pack_msg(req))
+                header = await loop.sock_recv(self._sock, 4)
+                if not header or len(header) < 4:
                     return None
-                return result
-            return None
-        except Exception:
-            logger.debug("RPC call %s failed", method, exc_info=True)
-            return None
+                (plen,) = struct.unpack(">I", header)
+                data = await loop.sock_recv(self._sock, plen)
+                if not data or len(data) < plen:
+                    return None
+                resp: object = _unpack_msg(data)
+                if isinstance(resp, list) and len(resp) >= 4:
+                    error: object = resp[2]
+                    result: object = resp[3]
+                    if error is not None:
+                        return None
+                    return result
+                return None
+            except Exception:
+                logger.debug("RPC call %s failed", method, exc_info=True)
+                return None
 
     async def read_all(self) -> list[SensorReading]:
         now = time.time()
@@ -154,22 +169,16 @@ class SerialMCU:
             )
 
         axes = ["accel_x", "accel_y", "accel_z"]
-        tasks = [self._rpc_call(a) for a in axes]
-        vals = await asyncio.gather(*tasks)
-        for name, val in zip(axes, vals, strict=True):
+        for axis in axes:
+            val = await self._rpc_call(axis)
             if isinstance(val, (int, float)):
-                readings.append(
-                    SensorReading(sensor=name, value=float(val), timestamp=now)
-                )
-
-        intensity = await self._rpc_call("movement_intensity")
-        if isinstance(intensity, (int, float)):
-            readings.append(
-                SensorReading(sensor="movement_intensity", value=float(intensity), timestamp=now)
-            )
+                readings.append(SensorReading(sensor=axis, value=float(val), timestamp=now))
 
         if readings:
             return _normalize_readings(readings)
+        if self._connected:
+            logger.warning("MCU connected but all sensor RPCs failed")
+            return []
         return _normalize_readings(self._mock.read_all())
 
     async def read_sensor(self, name: str) -> SensorReading | None:
@@ -202,16 +211,33 @@ class _MockProvider:
         self._values = dict(SENSOR_DEFAULTS)
 
     def read_all(self) -> list[SensorReading]:
+        import math
         import random
 
         now = time.time()
+        ax = random.uniform(-0.08, 0.08)
+        ay = random.uniform(-0.08, 0.08)
+        az = 1.0 + random.uniform(-0.05, 0.05)
+        intensity = max(0.0, math.sqrt(ax * ax + ay * ay + az * az) - 1.0)
         return [
             SensorReading(
-                sensor=k,
-                value=round(v + random.uniform(-v * 0.05, v * 0.05), 2),
+                sensor="temperature_c",
+                value=round(self._values["temperature_c"] + random.uniform(-0.2, 0.2), 2),
                 timestamp=now,
-            )
-            for k, v in self._values.items()
+            ),
+            SensorReading(
+                sensor="distance_cm",
+                value=round(self._values["distance_cm"] + random.uniform(-3, 3), 1),
+                timestamp=now,
+            ),
+            SensorReading(sensor="accel_x", value=round(ax, 4), timestamp=now),
+            SensorReading(sensor="accel_y", value=round(ay, 4), timestamp=now),
+            SensorReading(sensor="accel_z", value=round(az, 4), timestamp=now),
+            SensorReading(
+                sensor="movement_intensity",
+                value=round(intensity, 4),
+                timestamp=now,
+            ),
         ]
 
     def read_sensor(self, name: str) -> SensorReading | None:
