@@ -169,7 +169,9 @@ class YOLOCamera:
         self._session: Any = None
         self._last_frame: np.ndarray | None = None
         self._latest_frame: np.ndarray | None = None
+        self._last_jpeg: bytes | None = None
         self._frame_lock = threading.Lock()
+        self._jpeg_lock = threading.Lock()
         self._frame_thread: threading.Thread | None = None
         self._last_snapshot: PerceptionSnapshot = PerceptionSnapshot(
             detections=[], sounds=[], source="yolo_unavailable", timestamp=time.time()
@@ -233,26 +235,23 @@ class YOLOCamera:
         return self._last_snapshot
 
     def get_frame_jpeg(self) -> bytes | None:
-        """Return latest frame as JPEG with YOLO bounding boxes drawn, or None."""
-        if self._last_frame is None:
-            return None
+        """Return cached JPEG with bounding boxes, encoded during inference."""
+        with self._jpeg_lock:
+            return self._last_jpeg
+
+    def _encode_frame_jpeg(self, frame: np.ndarray, detections: list[Detection]) -> bytes | None:
         try:
             import cv2
 
-            frame = self._last_frame.copy()
-            snap = self._last_snapshot
-            h, w = frame.shape[:2]
-
-            for det in snap.detections:
+            annotated = frame.copy()
+            for det in detections:
                 x1, y1, x2, y2 = det.bbox
-                # Draw box
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 136), 2)
-                # Label
+                cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 136), 2)
                 label = f"{det.label} {det.confidence:.0%}"
                 (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(frame, (x1, y1 - th - 8), (x1 + tw + 4, y1), (0, 255, 136), -1)
+                cv2.rectangle(annotated, (x1, y1 - th - 8), (x1 + tw + 4, y1), (0, 255, 136), -1)
                 cv2.putText(
-                    frame,
+                    annotated,
                     label,
                     (x1 + 2, y1 - 4),
                     cv2.FONT_HERSHEY_SIMPLEX,
@@ -260,14 +259,17 @@ class YOLOCamera:
                     (0, 0, 0),
                     1,
                 )
-
-            # Encode to JPEG
-            _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            result: bytes = buf.tobytes()
-            return result
+            _, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            return buf.tobytes()
         except Exception:
             logger.exception("Failed to encode frame")
             return None
+
+    def _cache_jpeg(self, frame: np.ndarray, detections: list[Detection]) -> None:
+        jpeg = self._encode_frame_jpeg(frame, detections)
+        if jpeg is not None:
+            with self._jpeg_lock:
+                self._last_jpeg = jpeg
 
     def get_detection_log(self, limit: int = 50) -> list[dict[str, object]]:
         """Return recent detections with timestamps."""
@@ -355,9 +357,11 @@ class YOLOCamera:
         class_ids = class_ids[mask]
 
         if len(max_scores) == 0:
-            return PerceptionSnapshot(
+            snapshot = PerceptionSnapshot(
                 detections=[], sounds=[], source="yolo", timestamp=time.time()
             )
+            self._cache_jpeg(frame, [])
+            return snapshot
 
         # Convert xywh → xyxy for NMS
         x_c, y_c, w, h = boxes_xywh[:, 0], boxes_xywh[:, 1], boxes_xywh[:, 2], boxes_xywh[:, 3]
@@ -387,9 +391,11 @@ class YOLOCamera:
                 )
             )
 
-        return PerceptionSnapshot(
+        snapshot = PerceptionSnapshot(
             detections=detections,
             sounds=[],
             source="yolo",
             timestamp=time.time(),
         )
+        self._cache_jpeg(frame, detections)
+        return snapshot

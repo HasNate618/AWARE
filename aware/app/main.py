@@ -388,6 +388,8 @@ async def get_snapshot() -> dict[str, object]:
 async def video_stream() -> StreamingResponse:
     """MJPEG stream with YOLO bounding boxes overlaid."""
     camera = app.state.camera
+    settings: Settings = app.state.settings
+    frame_interval = 1.0 / settings.video_stream_fps
 
     async def generate() -> AsyncGenerator[bytes, None]:
         while True:
@@ -407,7 +409,7 @@ async def video_stream() -> StreamingResponse:
                     b"\xff\xd9"
                 )
             yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
-            await asyncio.sleep(0.1)  # ~10 FPS
+            await asyncio.sleep(frame_interval)
 
     return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
