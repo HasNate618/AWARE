@@ -142,34 +142,26 @@ class RulesEngine:
     async def _execute(self, rule: dict[str, object], detection: Detection) -> None:
         actions: list[dict[str, str]] = rule.get("actions", [])  # type: ignore[assignment]
         name: str = rule.get("name", "unknown")  # type: ignore[assignment]
-        logger.info("Rule '%s' matched (%s %.0f%%), executing %d actions",
-                     name, detection.label, detection.confidence * 100, len(actions))
+        logger.info(
+            "Rule '%s' matched (%s %.0f%%), executing %d actions",
+            name,
+            detection.label,
+            detection.confidence * 100,
+            len(actions),
+        )
         for action in actions:
             action_type = action.get("type", "log")
-            action_params: dict[str, object] = action.get("params", {})  # type: ignore[assignment]
-            speak_text = action_params.get("text", "")
-            det_label = detection.label
-            det_conf = detection.confidence
-            msg = f"Rule '{name}' triggered by {det_label} ({det_conf:.0%}). Action: {action_type}"
-            if speak_text:
-                msg += f' → "{speak_text}"'
-
-            await self.bus.publish("action", {
-                "rule": name,
-                "action": action_type,
-                "params": action,
-                "detection": {
-                    "label": detection.label,
-                    "confidence": detection.confidence,
-                    "bbox": detection.bbox,
+            await self.bus.publish(
+                "action",
+                {
+                    "rule": name,
+                    "action": action_type,
+                    "params": action,
+                    "detection": {
+                        "label": detection.label,
+                        "confidence": detection.confidence,
+                        "bbox": detection.bbox,
+                    },
+                    "timestamp": time.time(),
                 },
-                "timestamp": time.time(),
-            })
-            await self.db.log("action_executed", {
-                "rule": name,
-                "action": action_type,
-                "params": action_params,
-                "detection_label": detection.label,
-                "detection_confidence": detection.confidence,
-                "message": msg,
-            })
+            )

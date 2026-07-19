@@ -1,4 +1,5 @@
 """End-to-end integration test: command -> LLM -> parser -> rules -> evaluate -> action."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -182,6 +183,17 @@ async def test_full_flow_e2e() -> None:
 
     async def capture_action(event: dict[str, Any]) -> None:
         actions_received.append(event)
+        detection = event.get("detection", {})
+        await db.log(
+            "action_executed",
+            {
+                "rule": event.get("rule", "unknown"),
+                "action": event.get("action", "log"),
+                "detection_label": detection.get("label", ""),
+                "detection_confidence": detection.get("confidence", 0),
+                "message": f"Rule {event.get('rule')} triggered",
+            },
+        )
 
     bus.subscribe("action", capture_action)
 
@@ -205,9 +217,7 @@ async def test_full_flow_e2e() -> None:
     await db.close()
 
 
-async def test_and_conditions_across_types(
-    bus: EventBus, store: RulesStore, db: EventDB
-) -> None:
+async def test_and_conditions_across_types(bus: EventBus, store: RulesStore, db: EventDB) -> None:
     """AND across trigger types: detection + time must BOTH match."""
     # Rule: when person detected AND after 10pm, sound alarm
     await store.add(

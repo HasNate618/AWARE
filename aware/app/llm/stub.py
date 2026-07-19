@@ -48,7 +48,10 @@ class StubLLM:
         return result
 
     async def query_memory(self, question: str, context: str) -> str:
-        return f"[stub] I would answer: {question}\nContext: {context}"
+        return f"[stub] Based on the log: {context[:200]}...\n\nQ: {question}"
+
+    async def summarize_period(self, digest_text: str) -> str:
+        return digest_text
 
 
 def _slugify(text: str) -> str:

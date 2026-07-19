@@ -25,4 +25,11 @@ async def test_fallback_for_unstructured_input() -> None:
 async def test_query_memory_stub() -> None:
     llm = StubLLM()
     result = await llm.query_memory("what happened?", "person detected at 3pm")
-    assert "stub" in result.lower()
+    assert "what happened" in result.lower() or "person" in result.lower()
+
+
+async def test_summarize_period_stub() -> None:
+    llm = StubLLM()
+    digest = "11:15–11:20 | entered: person×1"
+    result = await llm.summarize_period(digest)
+    assert result == digest

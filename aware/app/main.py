@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -14,14 +15,17 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from aware.app.action.speaker import speak as speak_text
-from aware.app.config import get_settings, setup_logging
+from aware.app.config import Settings, get_settings, setup_logging
 from aware.app.core.event_bus import EventBus
 from aware.app.core.loop import RulesLoop
-from aware.app.llm.interface import RuleSpec
+from aware.app.llm.interface import LLMClient, RuleSpec
 from aware.app.llm.llama import LlamaLLM
 from aware.app.llm.stub import StubLLM
 from aware.app.mcu.bus import ActuatorBus, SensorBus
 from aware.app.memory.db import EventDB
+from aware.app.memory.query import answer_question
+from aware.app.memory.sensors import should_log_sensor
+from aware.app.memory.summarizer import MemorySummarizer
 from aware.app.parser.nl_parser import parse_rule
 from aware.app.perception.interface import PerceptionSnapshot, PerceptionSource, SensorCache
 from aware.app.perception.mock_camera import MockCamera
@@ -33,53 +37,33 @@ from aware.app.rules.store import RulesStore
 logger = logging.getLogger(__name__)
 
 MOCK_SNAPSHOT_INTERVAL = 0.5  # seconds
-
-
-def perception_logger_factory(db: EventDB) -> Any:
-    """Create a handler that logs snapshot summaries to the DB."""
-
-    async def handle_perception(event: dict[str, Any]) -> None:
-        snapshot: PerceptionSnapshot | None = event.get("snapshot")
-        if not snapshot:
-            return
-        if snapshot.detections or snapshot.sounds:
-            await db.log(
-                "perception",
-                {
-                    "detections": [(d.label, d.confidence) for d in snapshot.detections],
-                    "sounds": [(s.label, s.confidence) for s in snapshot.sounds],
-                    "source": snapshot.source,
-                },
-            )
-
-    return handle_perception
+SOUND_LOG_COOLDOWN = 2.0  # seconds
 
 
 async def perception_loop(
-    bus: EventBus, camera: PerceptionSource, mic: YAMNetMic | None = None,
+    bus: EventBus,
+    camera: PerceptionSource,
+    db: EventDB,
+    mic: YAMNetMic | None = None,
     sensor_cache: SensorCache | None = None,
 ) -> None:
     """Run camera + mic in background, publishing snapshots to event bus."""
     await camera.start()
-    # If YOLO camera, run its inference loop in parallel
     if isinstance(camera, YOLOCamera):
         asyncio.create_task(camera.run_inference_loop())
-    # Start mic detection loop
     if mic is not None:
         await mic.start()
         asyncio.create_task(mic.run_detection_loop())
 
     _prev_det_labels: set[str] = set()
-    _prev_sound_labels: set[str] = set()
+    _last_sound_log: dict[str, float] = {}
 
     try:
         while True:
-            # Merge camera + mic snapshots
             cam_snap = await camera.snapshot()
             sounds_snap = await mic.snapshot() if mic else None
 
             curr_det_labels = {d.label for d in cam_snap.detections}
-            curr_sound_labels = {s.label for s in sounds_snap.sounds} if sounds_snap else set()
 
             merged = PerceptionSnapshot(
                 detections=cam_snap.detections,
@@ -91,8 +75,24 @@ async def perception_loop(
                 timestamp=cam_snap.timestamp,
             )
 
+            for label in merged.entered:
+                conf = max(
+                    (d.confidence for d in merged.detections if d.label == label),
+                    default=1.0,
+                )
+                await db.log("detection_enter", {"label": label, "confidence": conf})
+            for label in merged.exited:
+                await db.log("detection_exit", {"label": label})
+            for sound in merged.sounds:
+                last = _last_sound_log.get(sound.label, 0.0)
+                if merged.timestamp - last >= SOUND_LOG_COOLDOWN:
+                    await db.log(
+                        "sound",
+                        {"label": sound.label, "confidence": sound.confidence},
+                    )
+                    _last_sound_log[sound.label] = merged.timestamp
+
             _prev_det_labels = curr_det_labels
-            _prev_sound_labels = curr_sound_labels
 
             await bus.publish("perception", {"snapshot": merged})
             await asyncio.sleep(MOCK_SNAPSHOT_INTERVAL)
@@ -102,31 +102,41 @@ async def perception_loop(
             await mic.stop()
 
 
-SENSOR_READ_INTERVAL = 0.5  # seconds
-
-
 async def sensor_loop(
-    sensors: SensorBus, bus: EventBus, db: EventDB,
+    sensors: SensorBus,
+    bus: EventBus,
+    db: EventDB,
+    settings: Settings,
     sensor_cache: SensorCache | None = None,
 ) -> None:
-    """Read sensors periodically and log to DB for timeseries."""
+    """Read sensors periodically; log to DB on interval or significant change."""
+    last_logged: dict[str, tuple[float, float]] = {}
     try:
         while True:
             readings = await sensors.read_all()
+            now = time.time()
             sensor_data: dict[str, float] = {}
             for r in readings:
                 sensor_data[r.sensor] = r.value
-                await db.log(
-                    f"sensor:{r.sensor}",
-                    {
-                        "label": r.sensor,
-                        "value": r.value,
-                        "unit": r.unit,
-                    },
-                )
+                if should_log_sensor(
+                    r.sensor,
+                    r.value,
+                    now,
+                    last_logged,
+                    settings.sensor_log_interval,
+                ):
+                    await db.log(
+                        f"sensor:{r.sensor}",
+                        {
+                            "label": r.sensor,
+                            "value": r.value,
+                            "unit": r.unit,
+                        },
+                    )
+                    last_logged[r.sensor] = (r.value, now)
             if sensor_cache is not None:
                 sensor_cache.update(sensor_data)
-            await asyncio.sleep(SENSOR_READ_INTERVAL)
+            await asyncio.sleep(settings.sensor_read_interval)
     except asyncio.CancelledError:
         pass
 
@@ -243,6 +253,10 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     app.state.engine = engine
     app.state.llm = llm
     app.state.camera = camera
+    app.state.settings = settings
+
+    llm_lock = asyncio.Lock()
+    app.state.llm_lock = llm_lock
 
     # Start mic for sound detection
     mic: YAMNetMic | None = None
@@ -269,17 +283,33 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 
     # Subscribe handlers (must be after all state is initialized)
     bus.subscribe("action", action_handler_factory(db, bus, sensor_bus))
-    bus.subscribe("perception", perception_logger_factory(db))
 
     sensor_cache = SensorCache()
+    app.state.sensor_cache = sensor_cache
+
+    summarizer_task: asyncio.Task[None] | None = None
+    if settings.memory_summary_enabled:
+        summarizer = MemorySummarizer(
+            db,
+            llm,
+            interval_seconds=float(settings.memory_summary_interval),
+            llm_lock=llm_lock,
+        )
+        summarizer_task = asyncio.create_task(summarizer.run())
 
     loop_task = asyncio.create_task(loop.start())
-    camera_task = asyncio.create_task(perception_loop(bus, camera, mic, sensor_cache))
-    sensor_task = asyncio.create_task(sensor_loop(sensor_bus, bus, db, sensor_cache))
+    camera_task = asyncio.create_task(
+        perception_loop(bus, camera, db, mic, sensor_cache),
+    )
+    sensor_task = asyncio.create_task(
+        sensor_loop(sensor_bus, bus, db, settings, sensor_cache),
+    )
     logger.info("AWARE started on %s:%d", settings.host, settings.port)
 
     yield
 
+    if summarizer_task is not None:
+        summarizer_task.cancel()
     loop.stop()
     camera_task.cancel()
     sensor_task.cancel()
@@ -305,6 +335,16 @@ async def root() -> dict[str, str]:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/sensors")
+async def get_sensors() -> dict[str, object]:
+    """Return live sensor readings from the in-memory cache."""
+    cache: SensorCache = app.state.sensor_cache
+    return {
+        "timestamp": time.time(),
+        "readings": dict(cache.readings),
+    }
 
 
 @app.get("/api/snapshot")
@@ -488,6 +528,73 @@ async def create_rule_endpoint(req: CommandRequest) -> CommandResponse:
     )
 
 
+class AskRequest(BaseModel):
+    question: str
+    since: float | None = None
+    window: int | None = None
+
+
+class AskResponse(BaseModel):
+    answer: str
+    window_start: float
+    window_end: float
+    summaries_used: int
+    events_scanned: int
+    context_preview: str = ""
+    latency_ms: float
+    used_llm: bool
+
+
+@app.post("/api/ask", response_model=AskResponse)
+async def ask_endpoint(req: AskRequest) -> AskResponse:
+    """Answer a natural-language question about recent activity."""
+    db: EventDB = app.state.db
+    llm: LLMClient = app.state.llm
+    settings: Settings = app.state.settings
+    llm_lock: asyncio.Lock = app.state.llm_lock
+    result = await answer_question(
+        req.question,
+        db,
+        llm,
+        settings,
+        llm_lock,
+        since=req.since,
+        window=req.window,
+    )
+    return AskResponse(
+        answer=result.answer,
+        window_start=result.window_start,
+        window_end=result.window_end,
+        summaries_used=result.summaries_used,
+        events_scanned=result.events_scanned,
+        context_preview=result.context_preview,
+        latency_ms=result.latency_ms,
+        used_llm=result.used_llm,
+    )
+
+
+@app.get("/api/summaries")
+async def get_summaries(
+    limit: int = 20,
+    since: float | None = None,
+) -> list[dict[str, object]]:
+    """Return stored period summaries."""
+    db: EventDB = app.state.db
+    since_ts = since if since is not None else 0.0
+    rows = await db.get_summaries(since=since_ts, limit=limit)
+    return [
+        {
+            "id": row["id"],
+            "period_start": row["period_start"],
+            "period_end": row["period_end"],
+            "narrative": row["narrative"],
+            "event_count": row["event_count"],
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
 @app.get("/api/timeseries")
 async def get_timeseries(
     topic: str = "sensor",
@@ -509,11 +616,15 @@ async def get_all_timeseries(
     Returns dict with keys: detection, sound, sensor (split by name), action_executed.
     """
     db: EventDB = app.state.db
-    topics = ["detection", "sound", "action_executed"]
+    topics = ["detection_enter", "sound", "action_executed"]
     result: dict[str, list[dict[str, object]]] = {}
 
     for t in topics:
-        ts = await db.timeseries(topic=t, window_seconds=window, bucket_seconds=bucket)
+        ts = await db.event_count_timeseries(
+            topic=t,
+            window_seconds=window,
+            bucket_seconds=bucket,
+        )
         if ts:
             result[t] = [{"label": t, "data": ts}]
 

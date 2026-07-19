@@ -16,28 +16,28 @@ logger = logging.getLogger(__name__)
 _SYSTEM_PROMPT = (
     "Create a JSON rule from the user's command.\n\n"
     "Examples:\n"
-    'User: when person walks in say welcome\n'
+    "User: when person walks in say welcome\n"
     'Output: {"name": "greet", "when": "person detected", '
     '"then": "say welcome", "priority": "normal"}\n\n'
-    'User: when person enters say hello\n'
+    "User: when person enters say hello\n"
     'Output: {"name": "greeter", "when": "person enters", '
     '"then": "say hello", "priority": "normal"}\n\n'
-    'User: when dog leaves say goodbye\n'
+    "User: when dog leaves say goodbye\n"
     'Output: {"name": "farewell", "when": "dog leaves", '
     '"then": "say goodbye", "priority": "normal"}\n\n'
-    'User: when glass breaks after 10pm sound alarm\n'
+    "User: when glass breaks after 10pm sound alarm\n"
     'Output: {"name": "night_alert", '
     '"when": "glass breaking sound and after 10pm", '
     '"then": "sound alarm", "priority": "high"}\n\n'
-    'User: when doorbell rings flash green\n'
+    "User: when doorbell rings flash green\n"
     'Output: {"name": "doorbell_alert", '
     '"when": "doorbell sound", '
     '"then": "flash green", "priority": "normal"}\n\n'
-    'User: when bottle within 1m say i am hydrophobic\n'
+    "User: when bottle within 1m say i am hydrophobic\n"
     'Output: {"name": "hydrophobic", '
     '"when": "bottle within 1m", '
     '"then": "say i am hydrophobic", "priority": "normal"}\n\n'
-    'User: when hot flash red\n'
+    "User: when hot flash red\n"
     'Output: {"name": "overheat", '
     '"when": "hot", '
     '"then": "flash red", "priority": "high"}'
@@ -172,28 +172,60 @@ class LlamaLLM:
             raw=content[:1000],
         )
 
-    async def query_memory(self, question: str, context: str) -> str:
-        messages = [
-            {
-                "role": "system",
-                "content": "Answer the user's question based on the context provided.",
-            },
-            {"role": "user", "content": f"Context: {context}\n\nQuestion: {question}"},
-        ]
+    async def summarize_period(self, digest_text: str) -> str:
+        start = time.monotonic()
+        prompt = (
+            "Summarize this activity log in 2-3 sentences. "
+            "Include specific times and counts. Only state facts from the log.\n\n"
+            f"Log:\n{digest_text}\n\nSummary:"
+        )
         payload = {
-            "model": self.model,
-            "messages": messages,
+            "prompt": prompt,
+            "temperature": 0.2,
+            "n_predict": 128,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(f"{self.base_url}/completion", json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+            content = str(data.get("content", "")).strip()
+            elapsed = (time.monotonic() - start) * 1000
+            self._stats.record(elapsed, bool(content))
+            return content or digest_text
+        except Exception:
+            elapsed = (time.monotonic() - start) * 1000
+            self._stats.record(elapsed, False)
+            logger.exception("LLM summarize_period failed")
+            return digest_text
+
+    async def query_memory(self, question: str, context: str) -> str:
+        start = time.monotonic()
+        prompt = (
+            "You are AWARE, an on-device space monitor. "
+            "Answer the question using only the activity log below. "
+            "Include specific times when available. "
+            "If the log does not contain the answer, say so.\n\n"
+            f"Activity log:\n{context}\n\n"
+            f"Question: {question}\n\nAnswer:"
+        )
+        payload = {
+            "prompt": prompt,
             "temperature": 0.3,
-            "max_tokens": 256,
+            "n_predict": 256,
         }
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(f"{self.base_url}/v1/chat/completions", json=payload)
+                resp = await client.post(f"{self.base_url}/completion", json=payload)
                 resp.raise_for_status()
                 data = resp.json()
+            content = str(data.get("content", "")).strip()
+            elapsed = (time.monotonic() - start) * 1000
+            self._stats.record(elapsed, bool(content))
+            return content or f"[error] Could not answer: {question}"
         except Exception:
+            elapsed = (time.monotonic() - start) * 1000
+            self._stats.record(elapsed, False)
             logger.exception("LLM memory query failed")
             return f"[error] Could not answer: {question}"
-
-        return str(data["choices"][0]["message"].get("content", ""))

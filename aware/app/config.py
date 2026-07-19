@@ -18,13 +18,15 @@ def detect_camera() -> str:
     try:
         result = subprocess.run(
             ["v4l2-ctl", "--list-devices"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         for line in result.stdout.splitlines():
             if "CAMERA" in line.upper() or "UVC" in line.upper():
                 # Next non-empty indented line is the device
                 idx = result.stdout.splitlines().index(line)
-                for subline in result.stdout.splitlines()[idx + 1:]:
+                for subline in result.stdout.splitlines()[idx + 1 :]:
                     stripped = subline.strip()
                     if stripped.startswith("/dev/video"):
                         return stripped
@@ -50,6 +52,12 @@ class Settings(BaseSettings):
     llm_ctx_size: int = 2048
     llm_timeout: float = 90.0
     rules_tick_ms: int = 500
+    sensor_read_interval: float = 2.0
+    sensor_log_interval: float = 30.0
+    memory_summary_interval: int = 300
+    memory_summary_enabled: bool = True
+    memory_context_max_chars: int = 6000
+    memory_default_window: int = 3600
     dashboard_dir: str = "dashboard"
     host: str = "0.0.0.0"
     port: int = 8000
