@@ -11,7 +11,7 @@ tar czf /tmp/aware-sync.tar.gz \
     --exclude='*.pyc' --exclude='models/*.gguf' \
     -C "$(dirname "$0")/.." aware/ dashboard/ scripts/ pyproject.toml AGENTS.md
 
-scp "$BOARD:/tmp/aware-sync.tar.gz" "$BOARD:/tmp/aware-sync.tar.gz"
+scp /tmp/aware-sync.tar.gz "$BOARD:/tmp/aware-sync.tar.gz"
 ssh "$BOARD" "cd $REMOTE_DIR && tar xzf /tmp/aware-sync.tar.gz"
 
 echo "Installing services..."
