@@ -3,546 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A.W.A.R.E.</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>A.W.A.R.E. Command Center</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; overflow-x: hidden; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', monospace; background: #0a0a0a; color: #e0e0e0; }
-        #app { width: 100%; }
-
-        .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-        .login-box { background: #111; border: 1px solid #2a2a2a; border-radius: 16px; padding: 36px 32px 32px; max-width: 380px; width: 100%; }
-
-        .acronym { display: flex; gap: 2px; justify-content: center; margin-bottom: 28px; }
-        .acronym-col { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
-        .acronym-letter { font-size: 30px; font-weight: 800; color: #00ff88; font-family: 'JetBrains Mono', 'Fira Code', monospace; letter-spacing: -1px; line-height: 1; margin-bottom: 4px; padding: 0 8px; }
-        .acronym-chars { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
-        .acronym-chars span { font-size: 10px; color: #555; font-family: 'JetBrains Mono', 'Fira Code', monospace; padding: 0 8px; letter-spacing: 0; }
-
-        .login-box input { width: 100%; background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 11px 14px; color: #e0e0e0; font-family: inherit; font-size: 14px; margin-bottom: 14px; transition: border-color .15s; }
-        .login-box input:focus { outline: none; border-color: #00ff88; }
-        .login-box .login-btn { width: 100%; background: #00ff88; color: #000; border: none; border-radius: 8px; padding: 11px; font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer; transition: opacity .15s; }
-        .login-box .login-btn:hover { opacity: .85; }
-
-        .header { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: #111; border-bottom: 1px solid #222; width: 100%; }
-        .header h1 { font-size: 15px; color: #00ff88; font-weight: 700; white-space: nowrap; letter-spacing: 1px; }
-        .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #00ff88; animation: pulse 2s infinite; flex-shrink: 0; }
-        .status-dot.offline { background: #ff4444; animation: none; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
-        .header-right { margin-left: auto; display: flex; align-items: center; flex-shrink: 0; }
-        .logout-icon { background: none; border: none; color: #555; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1; }
-        .logout-icon:hover { color: #ff4444; }
-        .logout-icon svg { width: 18px; height: 18px; fill: currentColor; }
-
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; max-width: 1400px; margin: 0 auto; width: 100%; }
-        @media (max-width: 700px) { .grid { grid-template-columns: 1fr; gap: 6px; padding: 6px; } }
-        .card { background: #111; border: 1px solid #2a2a2a; border-radius: 8px; padding: 12px; min-width: 0; }
-        .card h2 { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
-        .full { grid-column: 1 / -1; }
-        @media (max-width: 700px) { .full { grid-column: 1; } }
-        .empty { color: #444; font-style: italic; font-size: 12px; }
-
-        .video-wrap { position: relative; background: #000; border-radius: 4px; overflow: hidden; width: 100%; }
-        .video-wrap img { width: 100%; height: auto; display: block; }
-        .video-badge { position: absolute; top: 5px; left: 5px; background: #00ff8822; color: #00ff88; padding: 2px 7px; border-radius: 3px; font-size: 10px; }
-        .video-badge.offline { background: #ff444422; color: #ff4444; }
-
-        .workflow-list { list-style: none; }
-        .workflow-item { padding: 7px 0; border-bottom: 1px solid #1a1a1a; display: flex; align-items: flex-start; gap: 8px; }
-        .workflow-body { flex: 1; min-width: 0; }
-        .workflow-name { color: #00ff88; font-weight: 600; font-size: 12px; word-break: break-word; }
-        .workflow-desc { color: #777; font-size: 11px; word-break: break-word; margin-top: 2px; }
-        .workflow-del { background: none; border: 1px solid #ff444433; color: #ff4444; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 11px; font-family: inherit; flex-shrink: 0; }
-        .workflow-del:hover { background: #ff444422; }
-        .wf-badge { display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 3px; margin-right: 3px; }
-        .wf-badge.detection { background: #00ff8822; color: #00ff88; }
-        .wf-badge.sound { background: #ffaa0022; color: #ffaa00; }
-        .wf-badge.time { background: #8888ff22; color: #8888ff; }
-        .wf-badge.speak { background: #00bbff22; color: #00bbff; }
-        .wf-badge.led_flash { background: #ff880022; color: #ff8800; }
-        .wf-badge.led_on { background: #ffff0022; color: #ffff00; }
-        .wf-badge.led_off { background: #88888822; color: #888888; }
-        .wf-badge.telegram { background: #0088ff22; color: #0088ff; }
-        .wf-badge.alarm { background: #ff444422; color: #ff4444; }
-        .wf-badge.log { background: #66666622; color: #666666; }
-        .wf-badge.record { background: #ff00ff22; color: #ff00ff; }
-        .wf-badge.sensor { background: #ff668822; color: #ff6688; }
-
-        .trace { font-size: 11px; background: #080808; border: 1px solid #222; border-radius: 4px; padding: 8px 10px; margin-top: 6px; overflow-x: auto; display: none; }
-        .trace.show { display: block; }
-        .trace-step { color: #555; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; margin: 4px 0 2px; }
-        .trace-arrow { color: #333; text-align: center; }
-        .trace-json { color: #00bbff; word-break: break-word; }
-        .trace-parsed { color: #00ff88; word-break: break-word; }
-        .trace-stored { color: #aaa; word-break: break-word; }
-
-        .log-list { list-style: none; max-height: 200px; overflow-y: auto; font-size: 12px; }
-        .log-item { display: flex; gap: 6px; padding: 3px 0; border-bottom: 1px solid #181818; align-items: center; }
-        .log-time { color: #444; flex-shrink: 0; width: 65px; font-size: 10px; }
-        .log-label { font-weight: 600; flex-shrink: 0; width: 80px; font-size: 11px; }
-        .log-label.object { color: #00ff88; }
-        .log-label.sound { color: #ffaa00; }
-        .log-conf { color: #666; flex-shrink: 0; width: 36px; text-align: right; font-size: 10px; }
-        .log-bar { flex: 1; min-width: 20px; height: 3px; background: #181818; border-radius: 2px; }
-        .log-fill { height: 100%; border-radius: 2px; }
-        .log-fill.object { background: #00ff88; }
-        .log-fill.sound { background: #ffaa00; }
-
-        .command-form { display: flex; gap: 6px; }
-        .command-input { flex: 1; background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 4px; padding: 8px 10px; color: #e0e0e0; font-family: inherit; font-size: 12px; min-width: 0; }
-        .command-input:focus { outline: none; border-color: #00ff88; }
-        .command-btn { background: #00ff88; color: #000; border: none; border-radius: 4px; padding: 8px 14px; font-family: inherit; font-weight: 600; cursor: pointer; font-size: 12px; white-space: nowrap; }
-        .command-btn:hover { opacity: .85; }
-        .command-btn.ask-btn { background: #00bbff; }
-        .command-feedback { margin-top: 5px; font-size: 11px; color: #00ff88; word-break: break-word; }
-
-        .chart-wrap { height: 160px; position: relative; margin: 0 -2px; }
-        .chart-period { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
-        .chart-period button { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px; padding: 3px 8px; color: #666; font-size: 10px; cursor: pointer; font-family: inherit; }
-        .chart-period button.active { background: #00ff8822; border-color: #00ff88; color: #00ff88; }
-
-        .activity-list { list-style: none; max-height: 260px; overflow-y: auto; }
-        .activity-item { padding: 4px 0; border-bottom: 1px solid #181818; font-size: 11px; display: flex; gap: 6px; align-items: baseline; }
-        .activity-time { color: #444; flex-shrink: 0; width: 65px; font-size: 10px; }
-        .activity-tag { padding: 1px 5px; border-radius: 3px; font-size: 9px; flex-shrink: 0; }
-        .activity-tag.action { background: #ff880022; color: #ffaa00; }
-        .activity-tag.rule { background: #00ff8822; color: #00ff88; }
-        .activity-msg { color: #ccc; word-break: break-word; }
-
-        @media (max-width: 700px) {
-            .header { padding: 6px 10px; gap: 6px; }
-            .header h1 { font-size: 13px; }
-            .card { padding: 8px; }
-            .card h2 { font-size: 10px; margin-bottom: 6px; }
-            .grid { gap: 6px; padding: 6px; }
-            .log-time { width: 50px; font-size: 9px; }
-            .log-label { width: 60px; font-size: 10px; }
-            .log-item { gap: 4px; flex-wrap: wrap; }
-            .activity-time { width: 50px; font-size: 9px; }
-            .activity-item { flex-wrap: wrap; gap: 4px; }
-            .chart-wrap { height: 130px; }
-            .login-box { padding: 28px 18px 24px; }
-            .acronym-letter { font-size: 24px; }
-            .acronym-chars span { font-size: 9px; }
+        :root {
+            --bg: #07080f; --panel: rgba(18,20,35,.85); --border: rgba(120,130,255,.18);
+            --text: #e8eaf6; --muted: #7a7f9a; --cyan: #22d3ee; --indigo: #818cf8;
+            --green: #34d399; --amber: #fbbf24; --red: #f87171;
+            --mono: 'JetBrains Mono', ui-monospace, monospace;
+            --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
         }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { min-height:100vh; font-family:var(--sans); color:var(--text); background:
+            radial-gradient(ellipse 80% 50% at 15% -10%, rgba(99,102,241,.2), transparent),
+            radial-gradient(ellipse 50% 40% at 95% 5%, rgba(34,211,238,.12), transparent), var(--bg); }
+        .shell { max-width:1500px; margin:0 auto; padding:12px 14px 28px; }
+        .topbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 16px; margin-bottom:12px;
+            background:var(--panel); border:1px solid var(--border); border-radius:14px; backdrop-filter:blur(14px); }
+        .brand { font-family:var(--mono); font-weight:800; font-size:17px; letter-spacing:2px; color:var(--cyan); }
+        .brand em { color:var(--indigo); font-style:normal; }
+        .pill { font:10px var(--mono); padding:4px 10px; border-radius:999px; border:1px solid var(--border); color:var(--muted); }
+        .pill.ok { color:var(--green); border-color:rgba(52,211,153,.35); }
+        .pill.warn { color:var(--amber); border-color:rgba(251,191,36,.35); }
+        .pill.bad { color:var(--red); border-color:rgba(248,113,113,.35); }
+        .topbar-right { margin-left:auto; }
+        .logout { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:8px; padding:6px 10px; cursor:pointer; font-size:11px; }
+        .hero { display:grid; grid-template-columns:1.45fr 1fr; gap:12px; margin-bottom:12px; }
+        @media(max-width:960px){ .hero { grid-template-columns:1fr; } }
+        .panel { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px; min-width:0; }
+        .panel-title { font-size:10px; text-transform:uppercase; letter-spacing:2px; color:var(--muted); margin-bottom:10px; font-weight:600; }
+        .video { position:relative; border-radius:10px; overflow:hidden; background:#000; aspect-ratio:4/3; }
+        .video img { width:100%; height:100%; object-fit:cover; display:block; }
+        .video-tag { position:absolute; top:8px; left:8px; font:10px var(--mono); padding:3px 8px; border-radius:6px; background:rgba(0,0,0,.65); color:var(--green); }
+        .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+        .stat { text-align:center; padding:10px 6px; border-radius:10px; background:rgba(0,0,0,.35); border:1px solid var(--border); }
+        .stat .lbl { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+        .stat .num { font:700 22px var(--mono); margin:4px 0; }
+        .stat .unit { font-size:9px; color:var(--muted); }
+        .wins { display:flex; gap:6px; margin-bottom:10px; }
+        .wins button { background:rgba(0,0,0,.35); border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:4px 10px; font:10px var(--mono); cursor:pointer; }
+        .wins button.on { border-color:var(--cyan); color:var(--cyan); background:rgba(34,211,238,.1); }
+        .chart-lbl { font:9px var(--mono); color:var(--muted); margin-bottom:2px; }
+        .chart-box { height:58px; margin-bottom:8px; position:relative; }
+        .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+        @media(max-width:800px){ .row2 { grid-template-columns:1fr; } }
+        .interact { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+        @media(max-width:700px){ .interact { grid-template-columns:1fr; } }
+        .box { padding:14px; border-radius:12px; border:1px solid var(--border); background:rgba(0,0,0,.28); }
+        .box h3 { font-size:13px; margin-bottom:4px; }
+        .box p { font-size:11px; color:var(--muted); margin-bottom:10px; }
+        .box.teach h3 { color:var(--green); } .box.ask h3 { color:var(--cyan); }
+        .row { display:flex; gap:8px; }
+        .row input { flex:1; min-width:0; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:rgba(0,0,0,.4); color:var(--text); font-size:13px; }
+        .row input:focus { outline:none; border-color:var(--indigo); }
+        .btn { border:none; border-radius:8px; padding:10px 16px; font-weight:600; font-size:12px; cursor:pointer; white-space:nowrap; }
+        .btn:disabled { opacity:.5; cursor:wait; }
+        .btn-teach { background:var(--green); color:#042f1a; }
+        .btn-ask { background:linear-gradient(135deg,var(--cyan),var(--indigo)); color:#0a0a12; }
+        .fb { margin-top:10px; font-size:12px; min-height:18px; }
+        .ask-go { display:flex; gap:8px; align-items:center; color:var(--cyan); font:11px var(--mono); }
+        .spin { width:14px; height:14px; border:2px solid rgba(34,211,238,.25); border-top-color:var(--cyan); border-radius:50%; animation:sp .7s linear infinite; }
+        @keyframes sp { to { transform:rotate(360deg); } }
+        .ask-out { background:rgba(34,211,238,.07); border:1px solid rgba(34,211,238,.22); border-radius:8px; padding:12px; line-height:1.55; color:#cceeff; }
+        .ask-meta { font:10px var(--mono); color:var(--muted); margin-top:6px; }
+        .feed,.log,.rules { list-style:none; max-height:190px; overflow-y:auto; font-size:11px; }
+        .feed li,.log li,.rules li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.04); display:flex; gap:8px; align-items:baseline; }
+        .t { color:var(--muted); font:10px var(--mono); width:56px; flex-shrink:0; }
+        .tag { font-size:9px; padding:2px 6px; border-radius:4px; background:rgba(129,140,248,.14); color:var(--indigo); flex-shrink:0; }
+        .tag.act { background:rgba(251,191,36,.12); color:var(--amber); }
+        .lbl { font-weight:600; width:64px; flex-shrink:0; }
+        .lbl.obj { color:var(--green); } .lbl.snd { color:var(--amber); }
+        .rules .name { color:var(--green); font-weight:600; }
+        .rules .del { margin-left:auto; background:none; border:1px solid rgba(248,113,113,.3); color:var(--red); border-radius:4px; padding:2px 8px; cursor:pointer; font-size:10px; }
+        .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+        .login-box { width:100%; max-width:360px; padding:32px; background:var(--panel); border:1px solid var(--border); border-radius:16px; }
+        .login-box h1 { font-family:var(--mono); color:var(--cyan); text-align:center; margin-bottom:20px; letter-spacing:3px; }
+        .login-box input { width:100%; padding:12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:rgba(0,0,0,.4); color:var(--text); }
+        .login-box button { width:100%; padding:12px; border:none; border-radius:8px; background:var(--cyan); color:#041016; font-weight:700; cursor:pointer; }
     </style>
 </head>
 <body>
 <div id="app"></div>
-
 <script>
-    const API = window.location.origin;
+const API = location.origin;
+const showLogin = () => {
+    app.innerHTML = '<div class="login-wrap"><div class="login-box"><h1>A.W.A.R.E.</h1><input id="pw" type="password" placeholder="password" autofocus><button id="go">Enter</button></div></div>';
+    go.onclick = () => { localStorage.setItem('aware_logged_in','1'); showDash(); };
+    pw.onkeydown = e => { if (e.key==='Enter') go.click(); };
+};
+const showDash = () => {
+    app.innerHTML = '<div class="shell"><header class="topbar"><div class="brand">A.<em>W.A.R.E.</em></div><span class="pill" id="pConn">offline</span><span class="pill" id="pCam">cam</span><span class="pill" id="pMcu">mcu</span><span class="pill" id="pLlm">llm</span><div class="topbar-right"><button class="logout" id="out">logout</button></div></header>' +
+    '<section class="hero"><div class="panel"><div class="panel-title">Live vision</div><div class="video"><img id="vid" src="'+API+'/api/video"><span class="video-tag" id="vtag">...</span></div></div>' +
+    '<div class="panel"><div class="panel-title">Environment</div><div class="stats"><div class="stat"><div class="lbl">Temp</div><div class="num" id="tLive" style="color:#f87171">--</div><div class="unit">°C</div></div><div class="stat"><div class="lbl">Distance</div><div class="num" id="dLive" style="color:#60a5fa">--</div><div class="unit">cm</div></div><div class="stat"><div class="lbl">Motion</div><div class="num" id="mLive" style="color:#fbbf24">--</div><div class="unit">g dev</div></div></div>' +
+    '<div class="wins" id="wins"></div><div class="chart-lbl">temperature</div><div class="chart-box"><canvas id="cT"></canvas></div><div class="chart-lbl">distance</div><div class="chart-box"><canvas id="cD"></canvas></div><div class="chart-lbl">movement</div><div class="chart-box"><canvas id="cM"></canvas></div></div></section>' +
+    '<section class="interact"><div class="panel box teach"><h3>Teach</h3><p>Create automations in plain English.</p><div class="row"><input id="cmdIn" placeholder="when person detected say hello"><button class="btn btn-teach" id="cmdBtn">Teach</button></div><div class="fb" id="cmdFb"></div></div>' +
+    '<div class="panel box ask"><h3>Ask</h3><p>Query on-device memory — can take 1–2 min.</p><div class="row"><input id="askIn" placeholder="what happened in the last hour?"><button class="btn btn-ask" id="askBtn">Ask</button></div><div class="fb" id="askFb"></div></div></section>' +
+    '<section class="row2"><div class="panel"><div class="panel-title">Activity</div><ul class="feed" id="act"></ul></div><div class="panel"><div class="panel-title">Perception</div><ul class="log" id="obj"></ul><ul class="log" id="snd" style="margin-top:8px"></ul></div></section>' +
+    '<section class="panel"><div class="panel-title">Automations</div><ul class="rules" id="rules"></ul></section></div>';
+    init();
+};
+const app = document.getElementById('app');
+if (localStorage.getItem('aware_logged_in')) showDash(); else showLogin();
 
-    function acronymHTML() {
-        const letters = 'AWARE';
-        const words = ['Autonomous', 'Witness', 'And', 'Response', 'Engine'];
-        let html = '<div class="acronym">';
-        for (let i = 0; i < 5; i++) {
-            html += '<div class="acronym-col"><div class="acronym-letter">' + letters[i] + '</div><div class="acronym-chars">';
-            for (const ch of words[i]) {
-                html += '<span>' + ch + '</span>';
-            }
-            html += '</div></div>';
-        }
-        html += '</div>';
-        return html;
-    }
-
-    const LOGOUT_SVG = '<svg viewBox="0 0 24 24"><path d="M16 17v-3H9v-4h7V7l5 5-5 5M14 2a2 2 0 0 1 2 2v2h-2V4H5v16h9v-2h2v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9z"/></svg>';
-
-    function showLogin() {
-        document.getElementById('app').innerHTML =
-            '<div class="login-wrap"><div class="login-box">' + acronymHTML() +
-            '<input type="password" id="loginPass" placeholder="password" autofocus>' +
-            '<button class="login-btn" id="loginBtn">Login</button></div></div>';
-        document.getElementById('loginBtn').onclick = () => {
-            localStorage.setItem('aware_logged_in', '1');
-            showDashboard();
-        };
-        const inp = document.getElementById('loginPass');
-        inp.onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('loginBtn').click(); };
-        inp.focus();
-    }
-
-    function showDashboard() {
-        document.getElementById('app').innerHTML =
-            '<div class="header"><div class="status-dot" id="statusDot"></div><h1>A.W.A.R.E.</h1>' +
-            '<div class="header-right"><button class="logout-icon" id="logoutLink" title="logout">' + LOGOUT_SVG + '</button></div></div>' +
-            '<div class="grid">' +
-            '<div class="card full"><h2>Command</h2><div class="command-form"><input type="text" class="command-input" id="commandInput" placeholder=\'e.g. "when person detected"\'>' +
-            '<button class="command-btn" id="commandBtn">Teach</button></div><div class="command-feedback" id="commandFeedback"></div></div>' +
-            '<div class="card full"><h2>Ask</h2><div class="command-form"><input type="text" class="command-input" id="askInput" placeholder=\'e.g. "what happened in the last hour?"\'>' +
-            '<button class="command-btn ask-btn" id="askBtn">Ask</button></div><div class="command-feedback" id="askFeedback"></div>' +
-            '<div id="latestSummary" style="font-size:11px;color:#888;margin-top:6px"></div></div>' +
-            '<div class="card full"><h2>Camera</h2><div class="video-wrap"><img id="videoFeed" src="' + API + '/api/video" alt=""><div class="video-badge" id="cameraBadge">connecting</div></div></div>' +
-            '<div class="card full"><h2>Automations</h2><ul class="workflow-list" id="workflowList"><li class="empty">no automations yet</li></ul></div>' +
-            '<div class="card full"><h2>Object Log</h2><ul class="log-list" id="objectLog"><li class="empty">waiting for detections</li></ul></div>' +
-            '<div class="card full"><h2>Sound Log</h2><ul class="log-list" id="soundLog"><li class="empty">waiting for sounds</li></ul></div>' +
-            '<div class="card"><h2>Temperature <span id="tempLive" style="color:#ff4444;font-size:16px;text-transform:none">--</span><span style="color:#888;font-size:10px;text-transform:none"> °C</span></h2>' +
-            '<div class="chart-period" id="tempPeriod"></div><div class="chart-wrap"><canvas id="tempChart"></canvas></div></div>' +
-            '<div class="card"><h2>Distance <span id="distLive" style="color:#0088ff;font-size:16px;text-transform:none">--</span><span style="color:#888;font-size:10px;text-transform:none"> cm</span></h2>' +
-            '<div class="chart-period" id="distPeriod"></div><div class="chart-wrap"><canvas id="distChart"></canvas></div></div>' +
-            '<div class="card"><h2>Movement <span id="moveLive" style="color:#ffaa00;font-size:16px;text-transform:none">--</span></h2>' +
-            '<div class="chart-period" id="movePeriod"></div><div class="chart-wrap"><canvas id="moveChart"></canvas></div></div>' +
-            '<div class="card full"><h2>Activity</h2><ul class="activity-list" id="activityList"><li class="empty">no activity yet</li></ul></div>' +
-            '<div class="card full"><h2>LLM Stats</h2><div id="llmStats" style="font-size:11px;color:#888">loading...</div></div>' +
-            '</div>';
-        initDashboard();
-    }
-
-    if (localStorage.getItem('aware_logged_in')) showDashboard();
-    else showLogin();
-
-    function initDashboard() {
-        document.getElementById('logoutLink').onclick = () => {
-            localStorage.removeItem('aware_logged_in');
-            showLogin();
-        };
-
-        async function get(p) { try { const r = await fetch(API + p); return r.ok ? r.json() : null; } catch (e) { return null; } }
-        function setConn(ok) { const d = document.getElementById('statusDot'); if (d) d.className = 'status-dot' + (ok ? '' : ' offline'); }
-        function ts(t) { return t ? new Date(t * 1000).toLocaleTimeString() : '--'; }
-        function pc(c) { return Math.round(c * 100); }
-        function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-        const PERIODS = [
-            { label: '30s', window: 30, bucket: 5 },
-            { label: '5m', window: 300, bucket: 15 },
-            { label: '30m', window: 1800, bucket: 60 },
-            { label: '1h', window: 3600, bucket: 60 },
-            { label: '6h', window: 21600, bucket: 600 },
-        ];
-
-        const tempPeriodEl = document.getElementById('tempPeriod');
-        const distPeriodEl = document.getElementById('distPeriod');
-        const movePeriodEl = document.getElementById('movePeriod');
-        let tempWindow = 300, distWindow = 300, moveWindow = 300;
-        let tempBucket = 30, distBucket = 30, moveBucket = 30;
-
-        function renderPeriodButtons(container, state) {
-            if (!container) return;
-            container.innerHTML = PERIODS.map(p =>
-                '<button data-window="' + p.window + '" data-bucket="' + p.bucket + '" class="' +
-                (p.window === state.window ? 'active' : '') + '">' + p.label + '</button>'
-            ).join('');
-        }
-
-        renderPeriodButtons(tempPeriodEl, { window: tempWindow });
-        renderPeriodButtons(distPeriodEl, { window: distWindow });
-        renderPeriodButtons(movePeriodEl, { window: moveWindow });
-
-        tempPeriodEl.onclick = (e) => {
-            const btn = e.target.closest('button');
-            if (!btn) return;
-            tempPeriodEl.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            tempWindow = +btn.dataset.window;
-            tempBucket = +btn.dataset.bucket;
-            upChart(tempC, 'sensor:temperature_c', tempWindow, tempBucket);
-        };
-        distPeriodEl.onclick = (e) => {
-            const btn = e.target.closest('button');
-            if (!btn) return;
-            distPeriodEl.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            distWindow = +btn.dataset.window;
-            distBucket = +btn.dataset.bucket;
-            upChart(distC, 'sensor:distance_cm', distWindow, distBucket);
-        };
-        movePeriodEl.onclick = (e) => {
-            const btn = e.target.closest('button');
-            if (!btn) return;
-            movePeriodEl.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            moveWindow = +btn.dataset.window;
-            moveBucket = +btn.dataset.bucket;
-            upChart(moveC, 'sensor:movement_intensity', moveWindow, moveBucket);
-        };
-
-        async function badge() {
-            const d = await get('/api/snapshot');
-            if (!d) { setConn(false); return; }
-            setConn(true);
-            const b = document.getElementById('cameraBadge');
-            if (!b) return;
-            b.textContent = d.source;
-            b.className = 'video-badge' + (d.source.includes('unavailable') || d.source === 'mock_camera' ? ' offline' : '');
-        }
-
-        async function workflows() {
-            const d = await get('/rules');
-            const list = document.getElementById('workflowList');
-            if (!list) return;
-            if (!d || !d.length) { list.innerHTML = '<li class="empty">no automations yet</li>'; return; }
-            const existing = window._wfExpanded || {};
-            list.innerHTML = d.map(r => {
-                const id = 'trace-' + r.name.replace(/[^a-z0-9]/gi, '_');
-                const trigBadges = (r.triggers || []).map(t => {
-                    if (t.type === 'sensor') {
-                        return '<span class="wf-badge sensor">' + t.value + ' ' + (t.sensor_op === 'lt' ? '<' : '>') + ' ' + t.sensor_threshold + '</span>';
-                    }
-                    return '<span class="wf-badge ' + t.type + '">' + t.type + ': ' + t.value + (t.time_range ? ' ' + t.time_range[0] + '-' + t.time_range[1] + 'h' : '') + '</span>';
-                }).join(' ');
-                const actBadges = (r.actions || []).map(a =>
-                    '<span class="wf-badge ' + a.type + '">' + a.type + '</span>'
-                ).join(' ');
-                const llmRaw = r.llm_raw || '';
-                const hasTrace = llmRaw.length > 0;
-                const expanded = existing[id] || false;
-                return '<li class="workflow-item"><div class="workflow-body"><div class="workflow-name">' + r.name +
-                    '</div><div class="wf-tags" style="margin:2px 0">' + trigBadges + ' → ' + actBadges +
-                    '</div><div class="workflow-desc">when ' + r.when_text + ' → ' + r.then_text +
-                    (hasTrace ? ' <a href="#" class="wf-trace-toggle" data-id="' + id + '" style="color:#555;font-size:10px">trace</a>' : '') +
-                    '</div>' + (hasTrace ?
-                    '<div class="trace' + (expanded ? ' show' : '') + '" id="' + id + '">' +
-                        '<div class="trace-step">Model</div>' +
-                        '<div class="trace-json">' + escHtml(llmRaw) + '</div>' +
-                        '<div class="trace-arrow">↓</div>' +
-                        '<div class="trace-step">Parser</div>' +
-                        '<div class="trace-parsed">triggers: ' + escHtml(JSON.stringify(r.triggers)) + '<br>actions: ' + escHtml(JSON.stringify(r.actions)) + '</div>' +
-                        '<div class="trace-arrow">↓</div>' +
-                        '<div class="trace-step">Stored</div>' +
-                        '<div class="trace-stored">priority: ' + r.priority + ' · created: ' + ts(r.created_at) + '</div>' +
-                    '</div>' : '') +
-                    '</div><button class="workflow-del" data-name="' + r.name + '">delete</button></li>';
-            }).join('');
-            list.querySelectorAll('.workflow-del').forEach(b => {
-                b.onclick = async () => {
-                    await fetch(API + '/rules/' + encodeURIComponent(b.dataset.name), { method: 'DELETE' });
-                    workflows(); updateActivity();
-                };
-            });
-            list.querySelectorAll('.wf-trace-toggle').forEach(a => {
-                a.onclick = (e) => {
-                    e.preventDefault();
-                    const id = a.dataset.id;
-                    const el = document.getElementById(id);
-                    if (el) { el.classList.toggle('show'); }
-                    if (!window._wfExpanded) window._wfExpanded = {};
-                    window._wfExpanded[id] = el ? el.classList.contains('show') : false;
-                };
-            });
-        }
-
-        async function objects() {
-            const d = await get('/api/objects?limit=50');
-            const list = document.getElementById('objectLog');
-            if (!list) return;
-            if (!d || !d.length) { list.innerHTML = '<li class="empty">waiting for detections</li>'; return; }
-            list.innerHTML = d.reverse().map(e =>
-                '<li class="log-item"><span class="log-time">' + ts(e.timestamp) +
-                '</span><span class="log-label object">' + e.label +
-                '</span><span class="log-conf">' + pc(e.confidence) +
-                '%</span><span class="log-bar"><span class="log-fill object" style="width:' + pc(e.confidence) + '%"></span></span></li>'
-            ).join('');
-        }
-
-        async function sounds() {
-            const d = await get('/api/sounds?limit=50');
-            const list = document.getElementById('soundLog');
-            if (!list) return;
-            if (!d || !d.length) { list.innerHTML = '<li class="empty">waiting for sounds</li>'; return; }
-            list.innerHTML = d.reverse().map(e =>
-                '<li class="log-item"><span class="log-time">' + ts(e.timestamp) +
-                '</span><span class="log-label sound">' + e.label +
-                '</span><span class="log-conf">' + pc(e.confidence) +
-                '%</span><span class="log-bar"><span class="log-fill sound" style="width:' + pc(e.confidence) + '%"></span></span></li>'
-            ).join('');
-        }
-
-        async function cmd() {
-            const inp = document.getElementById('commandInput');
-            const cmd = inp.value.trim();
-            if (!cmd) return;
-            const btn = document.getElementById('commandBtn'), fb = document.getElementById('commandFeedback');
-            btn.textContent = '...'; btn.disabled = true;
-            try {
-                const r = await fetch(API + '/api/command', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: cmd }) });
-                if (r.ok) {
-                    const resp = await r.json();
-                    inp.value = '';
-                    let html = '✓ "' + escHtml(resp.rule_name) + '" created';
-                    if (resp.llm_output) {
-                        html += '<div class="trace show" style="display:block;margin-top:6px;padding:6px 8px;font-size:10px">' +
-                            '<div class="trace-step">You said</div>' +
-                            '<div style="color:#888">' + escHtml(cmd) + '</div>' +
-                            '<div class="trace-arrow">↓</div>' +
-                            '<div class="trace-step">LLM output</div>' +
-                            '<div class="trace-json">' + escHtml(resp.llm_output) + '</div>' +
-                            '<div class="trace-arrow">↓</div>' +
-                            '<div class="trace-step">Parser extracted</div>' +
-                            '<div class="trace-parsed">triggers: ' + escHtml(JSON.stringify(resp.triggers)) + '<br>actions: ' + escHtml(JSON.stringify(resp.actions)) + '</div>' +
-                            '<div class="trace-arrow">↓</div>' +
-                            '<div class="trace-step">Stored</div>' +
-                            '<div class="trace-stored">name: ' + escHtml(resp.rule_name) + ' · priority: ' + escHtml(resp.priority) + '</div>' +
-                            '</div>';
-                    }
-                    fb.innerHTML = html;
-                    workflows(); updateActivity();
-                } else fb.textContent = '✗ failed';
-            } catch(e) { fb.textContent = '✗ error'; }
-            btn.textContent = 'Teach'; btn.disabled = false; setTimeout(() => fb.innerHTML = '', 12000);
-        }
-
-        const cBtn = document.getElementById('commandBtn'), cInp = document.getElementById('commandInput');
-        if (cBtn) cBtn.onclick = cmd;
-        if (cInp) cInp.onkeydown = e => { if (e.key === 'Enter') cmd(); };
-
-        async function ask() {
-            const inp = document.getElementById('askInput');
-            const q = inp.value.trim();
-            if (!q) return;
-            const btn = document.getElementById('askBtn'), fb = document.getElementById('askFeedback');
-            btn.textContent = '...'; btn.disabled = true;
-            try {
-                const r = await fetch(API + '/api/ask', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: q }) });
-                if (r.ok) {
-                    const resp = await r.json();
-                    inp.value = '';
-                    let html = escHtml(resp.answer);
-                    if (resp.context_preview) {
-                        html += '<details style="margin-top:6px"><summary style="color:#555;cursor:pointer">context</summary>' +
-                            '<div style="color:#666;font-size:10px;margin-top:4px">' + escHtml(resp.context_preview) + '</div></details>';
-                    }
-                    fb.innerHTML = html;
-                    updateActivity();
-                } else fb.textContent = '✗ failed';
-            } catch(e) { fb.textContent = '✗ error'; }
-            btn.textContent = 'Ask'; btn.disabled = false;
-        }
-
-        const aBtn = document.getElementById('askBtn'), aInp = document.getElementById('askInput');
-        if (aBtn) aBtn.onclick = ask;
-        if (aInp) aInp.onkeydown = e => { if (e.key === 'Enter') ask(); };
-
-        async function latestSummary() {
-            const d = await get('/api/summaries?limit=1');
-            const el = document.getElementById('latestSummary');
-            if (!el) return;
-            if (!d || !d.length) { el.textContent = ''; return; }
-            el.textContent = 'Latest summary: ' + d[d.length - 1].narrative;
-        }
-
-        async function liveSensors() {
-            const d = await get('/api/sensors');
-            if (!d || !d.readings) return;
-            const r = d.readings;
-            const t = document.getElementById('tempLive');
-            const dist = document.getElementById('distLive');
-            const m = document.getElementById('moveLive');
-            if (t && r.temperature_c != null) t.textContent = r.temperature_c.toFixed(1);
-            if (dist && r.distance_cm != null) dist.textContent = Math.round(r.distance_cm);
-            if (m && r.movement_intensity != null) m.textContent = r.movement_intensity.toFixed(2);
-        }
-
-        const vf = document.getElementById('videoFeed');
-        if (vf) vf.onerror = function() { this.src = API + '/api/video?' + Date.now(); };
-
-        function makeChart(id, label, color) {
-            const el = document.getElementById(id);
-            if (!el) return null;
-            const ctx = el.getContext('2d');
-            return new Chart(ctx, {
-                type: 'line',
-                data: { labels: [], datasets: [{ label, data: [], borderColor: color, backgroundColor: color + '18', fill: true, tension: 0.15, pointRadius: 0, borderWidth: 2 }] },
-                options: {
-                    responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
-                    scales: {
-                        x: { ticks: { color: '#444', maxTicksLimit: 6, font: { size: 8 } }, grid: { color: '#181818' } },
-                        y: { ticks: { color: '#444', font: { size: 8 } }, grid: { color: '#181818' }, grace: '10%' },
-                    },
-                    plugins: { legend: { display: false } },
-                },
-            });
-        }
-
-        const tempC = makeChart('tempChart', '°C', '#ff4444');
-        const distC = makeChart('distChart', 'cm', '#0088ff');
-        const moveC = makeChart('moveChart', 'intensity', '#ffaa00');
-
-        async function upChart(ch, topic, window, bucket) {
-            if (!ch) return;
-            const d = await get('/api/timeseries?topic=' + topic + '&window=' + window + '&bucket=' + bucket);
-            if (!d || !d.length) return;
-            const vals = d.map(x => x.avg);
-            ch.data.labels = d.map(x => new Date(x.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-            ch.data.datasets[0].data = vals;
-            const min = Math.min(...vals);
-            const max = Math.max(...vals);
-            if (min === max) {
-                ch.options.scales.y.min = min - 1;
-                ch.options.scales.y.max = max + 1;
-            } else {
-                delete ch.options.scales.y.min;
-                delete ch.options.scales.y.max;
-            }
-            ch.update();
-        }
-
-        function activityMessage(topic, dd) {
-            if (dd.message) return dd.message;
-            if (topic === 'detection_enter') return (dd.label || 'object') + ' entered (' + pc(dd.confidence || 0) + '%)';
-            if (topic === 'detection_exit') return (dd.label || 'object') + ' left';
-            if (topic === 'sound') return (dd.label || 'sound') + ' (' + pc(dd.confidence || 0) + '%)';
-            if (topic === 'rule_created') return 'rule "' + (dd.name || '') + '"';
-            if (topic === 'summary_created') return (dd.narrative || 'period summary').substring(0, 120);
-            if (topic === 'memory_query') return 'Q: ' + (dd.question || '').substring(0, 60);
-            return dd.name || JSON.stringify(dd).substring(0, 100);
-        }
-
-        async function updateActivity() {
-            const d = await get('/api/activity?limit=30');
-            const list = document.getElementById('activityList');
-            if (!list) return;
-            if (!d || !d.length) { list.innerHTML = '<li class="empty">no activity yet</li>'; return; }
-            list.innerHTML = d.reverse().map(e => {
-                const dd = e.data || {};
-                const cls = e.topic === 'action_executed' ? 'action' : 'rule';
-                const msg = activityMessage(e.topic, dd);
-                return '<li class="activity-item"><span class="activity-time">' + ts(e.timestamp) +
-                    '</span><span class="activity-tag ' + cls + '">' + e.topic.replace('_', ' ') +
-                    '</span><span class="activity-msg">' + msg + '</span></li>';
-            }).join('');
-        }
-
-        async function updateLLMStats() {
-            const d = await get('/api/llm/stats');
-            const el = document.getElementById('llmStats');
-            if (!el) return;
-            if (!d) { el.textContent = 'offline'; return; }
-            const rate = (d.success_rate * 100).toFixed(1);
-            el.innerHTML =
-                '<span style="color:#00ff88">' + d.total_calls + ' calls</span>' +
-                ' · <span style="color:#888">' + rate + '% success</span>' +
-                ' · <span style="color:#00bbff">' + d.avg_latency_ms + 'ms avg</span>' +
-                ' · <span style="color:#ff4444">' + d.failed_calls + ' failed</span>';
-        }
-
-        setInterval(badge, 2000);
-        setInterval(workflows, 3000);
-        setInterval(objects, 1000);
-        setInterval(sounds, 1000);
-        setInterval(() => upChart(tempC, 'sensor:temperature_c', tempWindow, tempBucket), 2000);
-        setInterval(() => upChart(distC, 'sensor:distance_cm', distWindow, distBucket), 2000);
-        setInterval(() => upChart(moveC, 'sensor:movement_intensity', moveWindow, moveBucket), 2000);
-        setInterval(updateActivity, 2000);
-        setInterval(updateLLMStats, 5000);
-        setInterval(latestSummary, 30000);
-        setInterval(liveSensors, 2000);
-
-        badge(); workflows(); objects(); sounds();
-        upChart(tempC, 'sensor:temperature_c', tempWindow, tempBucket);
-        upChart(distC, 'sensor:distance_cm', distWindow, distBucket);
-        upChart(moveC, 'sensor:movement_intensity', moveWindow, moveBucket);
-        updateActivity();
-        updateLLMStats();
-        latestSummary();
-        liveSensors();
-    }
+function init() {
+    out.onclick = () => { localStorage.removeItem('aware_logged_in'); showLogin(); };
+    const get = async p => { try { const r = await fetch(API+p); return r.ok ? r.json() : null; } catch { return null; } };
+    const ts = t => t ? new Date(t*1000).toLocaleTimeString() : '--';
+    const esc = s => { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; };
+    const pc = c => Math.round(c*100);
+    const WINS = [{l:'30s',s:30},{l:'2m',s:120},{l:'5m',s:300}];
+    let winSec = 30;
+    const bufs = { temperature_c:[], distance_cm:[], movement_intensity:[] };
+    wins.innerHTML = WINS.map(w=>'<button data-s="'+w.s+'"'+(w.s===30?' class="on"':'')+'>'+w.l+'</button>').join('');
+    wins.onclick = e => { const b=e.target.closest('button'); if(!b)return; wins.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); winSec=+b.dataset.s; trim(); paint(); };
+    const trim = () => { const cut=Date.now()/1000-winSec; for(const k of Object.keys(bufs)) while(bufs[k].length&&bufs[k][0].t<cut) bufs[k].shift(); };
+    const mk = (id,col) => new Chart(document.getElementById(id).getContext('2d'), { type:'line', data:{labels:[],datasets:[{data:[],borderColor:col,backgroundColor:col+'22',fill:true,tension:.4,pointRadius:0,borderWidth:2}]},
+        options:{responsive:true,maintainAspectRatio:false,animation:{duration:350,easing:'easeOutQuart'},transitions:{active:{animation:{duration:350}}},scales:{x:{display:false},y:{display:false}},plugins:{legend:{display:false}}}});
+    const ch = { temperature_c:mk('cT','#f87171'), distance_cm:mk('cD','#60a5fa'), movement_intensity:mk('cM','#fbbf24') };
+    const paint = () => { for(const [k,c] of Object.entries(ch)) { const p=bufs[k]||[]; c.data.labels=p.map(x=>new Date(x.t*1000).toLocaleTimeString([],{second:'2-digit'})); c.data.datasets[0].data=p.map(x=>x.v); c.update('active'); } };
+    const pollSens = async () => {
+        const d = await get('/api/sensors'); if(!d?.readings) return;
+        const r=d.readings, now=d.timestamp||Date.now()/1000;
+        if(r.temperature_c!=null) tLive.textContent=r.temperature_c.toFixed(1);
+        if(r.distance_cm!=null) dLive.textContent=Math.round(r.distance_cm);
+        if(r.movement_intensity!=null) mLive.textContent=r.movement_intensity.toFixed(3);
+        pMcu.className='pill '+(r.accel_x!=null?'ok':'warn'); pMcu.textContent=r.accel_x!=null?'mcu live':'mcu mock';
+        for(const k of Object.keys(bufs)) { if(r[k]==null) continue; const b=bufs[k]; if(b.length&&Math.abs(b[b.length-1].t-now)<.5) continue; b.push({t:now,v:r[k]}); }
+        trim(); paint();
+    };
+    const pollSnap = async () => { const d=await get('/api/snapshot'); if(!d){pConn.textContent='offline';pConn.className='pill bad';return;} pConn.textContent='online';pConn.className='pill ok'; vtag.textContent=d.source||'?'; pCam.className='pill '+(String(d.source).includes('yolo')?'ok':'warn'); };
+    const pollLlm = async () => { const d=await get('/api/llm/stats'); if(!d){pLlm.textContent='llm off';pLlm.className='pill bad';return;} pLlm.textContent='llm '+Math.round(d.avg_latency_ms/1000)+'s'; pLlm.className='pill ok'; };
+    const pollAct = async () => { const d=await get('/api/activity?limit=20'); act.innerHTML=(d?.length?d.slice().reverse():[]).map(e=>{const dd=e.data||{};const m=dd.message||dd.label||dd.name||dd.question||'';return '<li><span class="t">'+ts(e.timestamp)+'</span><span class="tag'+(e.topic==='action_executed'?' act':'')+'">'+e.topic.replace(/_/g,' ')+'</span><span>'+esc(String(m))+'</span></li>';}).join('')||'<li>no activity</li>'; };
+    const pollLogs = async () => { const o=await get('/api/objects?limit=20'), s=await get('/api/sounds?limit=15');
+        obj.innerHTML=(o?.length?o.slice().reverse():[]).map(e=>'<li><span class="t">'+ts(e.timestamp)+'</span><span class="lbl obj">'+e.label+'</span><span>'+pc(e.confidence)+'%</span></li>').join('')||'<li>waiting</li>';
+        snd.innerHTML=(s?.length?s.slice().reverse():[]).map(e=>'<li><span class="t">'+ts(e.timestamp)+'</span><span class="lbl snd">'+e.label+'</span><span>'+pc(e.confidence)+'%</span></li>').join('')||'<li>waiting</li>'; };
+    const pollRules = async () => { const d=await get('/rules'); rules.innerHTML=(d?.length?d:[]).map(r=>'<li><div><div class="name">'+r.name+'</div><div style="color:var(--muted);margin-top:2px">'+r.when_text+' → '+r.then_text+'</div></div><button class="del" data-n="'+r.name+'">×</button></li>').join('')||'<li>none</li>';
+        rules.querySelectorAll('.del').forEach(b=>b.onclick=async()=>{await fetch(API+'/rules/'+encodeURIComponent(b.dataset.n),{method:'DELETE'});pollRules();pollAct();}); };
+    cmdBtn.onclick = async () => { const c=cmdIn.value.trim(); if(!c)return; cmdBtn.disabled=true; cmdFb.textContent='teaching...';
+        try{const r=await fetch(API+'/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:c})}); if(r.ok){cmdIn.value='';cmdFb.textContent='✓ created';pollRules();pollAct();}else cmdFb.textContent='✗ failed';}catch{cmdFb.textContent='✗ error';} cmdBtn.disabled=false; };
+    let askT=null;
+    askBtn.onclick = async () => { const q=askIn.value.trim(); if(!q)return; askBtn.disabled=true; const t0=Date.now();
+        askFb.innerHTML='<div class="ask-go"><span class="spin"></span><span id="askT">Thinking... 0s (up to ~2 min)</span></div>';
+        askT=setInterval(()=>{const el=document.getElementById('askT');if(el)el.textContent='Thinking... '+Math.floor((Date.now()-t0)/1000)+'s (up to ~2 min)';},1000);
+        try{const r=await fetch(API+'/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})}); clearInterval(askT);
+            if(r.ok){const j=await r.json(); askIn.value=''; askFb.innerHTML='<div class="ask-out">'+esc(j.answer)+'</div><div class="ask-meta">'+(j.used_llm?'LLM':'digest')+' · '+Math.round((j.latency_ms||0)/1000)+'s · '+(j.events_scanned||0)+' events</div>'; pollAct();}
+            else askFb.innerHTML='<div class="ask-go" style="color:var(--red)">✗ failed HTTP '+r.status+'</div>';
+        }catch{clearInterval(askT); askFb.innerHTML='<div class="ask-go" style="color:var(--red)">✗ timeout</div>';} askBtn.disabled=false; };
+    vid.onerror = function(){ this.src=API+'/api/video?'+Date.now(); };
+    setInterval(pollSens,2000); setInterval(pollSnap,2000); setInterval(pollAct,2000); setInterval(pollLogs,1500); setInterval(pollRules,5000); setInterval(pollLlm,10000);
+    pollSens(); pollSnap(); pollAct(); pollLogs(); pollRules(); pollLlm();
+}
 </script>
 </body>
 </html>

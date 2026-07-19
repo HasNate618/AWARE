@@ -178,17 +178,32 @@ class YOLOCamera:
         )
         self._detection_log: deque[dict[str, object]] = deque(maxlen=200)
 
+    def _create_session(self) -> Any:
+        import onnxruntime as ort
+
+        available = ort.get_available_providers()
+        providers: list[str | tuple[str, dict[str, str]]] = []
+        if "QNNExecutionProvider" in available:
+            providers.append(("QNNExecutionProvider", {"backend_type": "gpu"}))
+        elif "OpenVINOExecutionProvider" in available:
+            providers.append("OpenVINOExecutionProvider")
+        providers.append("CPUExecutionProvider")
+        session = ort.InferenceSession(self._session_path(), providers=providers)
+        logger.info(
+            "YOLO ONNX available=%s active=%s",
+            available,
+            session.get_providers()[0],
+        )
+        return session
+
     async def start(self) -> None:
         self._running = True
         try:
             import cv2
 
             logger.info("Loading YOLO ONNX model: %s", self.model_path)
-            import onnxruntime as ort
 
-            self._session = ort.InferenceSession(
-                self._session_path(), providers=["CPUExecutionProvider"]
-            )
+            self._session = self._create_session()
             logger.info("Model loaded, input: %s", self._session.get_inputs()[0].shape)
 
             logger.info("Opening camera: %s (%dx%d)", self.device, *self.resolution)
