@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>A.W.A.R.E.</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         :root {
@@ -19,6 +22,7 @@
             --amber: #ffaa00;
             --red: #ff5555;
             --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+            --display: 'Orbitron', sans-serif;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -33,13 +37,20 @@
             background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
             backdrop-filter: blur(12px);
         }
-        .brand { font-weight: 700; font-size: 14px; letter-spacing: 2px; color: var(--accent); }
+        .brand { font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: 0.18em; color: var(--accent); }
         .pill { font-size: 10px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
         .pill.ok { color: var(--accent); border-color: rgba(0, 255, 136, 0.35); }
         .pill.warn { color: var(--amber); border-color: rgba(255, 170, 0, 0.35); }
         .pill.bad { color: var(--red); border-color: rgba(255, 85, 85, 0.35); }
         .topbar-right { margin-left: auto; }
-        .logout { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 10px; font-family: inherit; }
+        .logout {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; padding: 0;
+            background: transparent; border: 1px solid var(--border); color: var(--muted);
+            border-radius: 6px; cursor: pointer;
+        }
+        .logout:hover { color: var(--accent); border-color: rgba(0, 255, 136, 0.35); }
+        .logout svg { width: 16px; height: 16px; fill: currentColor; }
 
         .layout { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 10px; margin-bottom: 10px; }
         @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
@@ -49,7 +60,7 @@
             padding: 12px; min-width: 0; backdrop-filter: blur(10px);
         }
         .panel-title {
-            font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+            font-family: var(--display); font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em;
             color: var(--muted); margin-bottom: 8px;
         }
 
@@ -60,7 +71,7 @@
         .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
         .stat { text-align: center; padding: 8px 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); }
         .stat .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; }
-        .stat .num { font-size: 20px; font-weight: 700; color: var(--accent); margin: 3px 0; }
+        .stat .num { font-family: var(--display); font-size: 20px; font-weight: 700; color: var(--accent); margin: 3px 0; }
         .stat .unit { font-size: 9px; color: var(--muted); }
         .src-line { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
         .src-line.live { color: var(--accent); }
@@ -73,15 +84,15 @@
             background: rgba(0, 255, 136, 0.04); border: 1px solid var(--border);
         }
         .witness-stat.hero { border-color: rgba(0, 255, 136, 0.35); background: rgba(0, 255, 136, 0.08); }
-        .witness-stat .lbl { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-        .witness-stat .num { font-size: 36px; font-weight: 700; color: var(--accent); line-height: 1.1; margin: 4px 0; }
+        .witness-stat .lbl { font-family: var(--display); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+        .witness-stat .num { font-family: var(--display); font-size: 36px; font-weight: 700; color: var(--accent); line-height: 1.1; margin: 4px 0; }
         .witness-stat .unit { font-size: 10px; color: var(--muted); }
         .witness-log { max-height: 200px; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
         .witness-log li { display: block; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
         .witness-log li:last-child { border-bottom: none; }
         .witness-log .witness-time { font-size: 9px; letter-spacing: 0.08em; color: var(--muted); display: block; margin-bottom: 4px; }
         .witness-log .witness-text { font-size: 12px; color: #ccc; line-height: 1.45; }
-        .witness-recap-lbl { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-top: 8px; margin-bottom: 4px; }
+        .witness-recap-lbl { font-family: var(--display); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-top: 8px; margin-bottom: 4px; }
 
         .wins { display: flex; gap: 4px; margin-bottom: 8px; }
         .wins button { background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 3px 8px; font-size: 10px; cursor: pointer; font-family: inherit; }
@@ -98,7 +109,7 @@
         .row { display: flex; gap: 6px; }
         .row input { flex: 1; min-width: 0; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--border); background: rgba(0,0,0,0.35); color: var(--text); font-size: 12px; font-family: inherit; }
         .row input:focus { outline: none; border-color: var(--accent); }
-        .btn { border: none; border-radius: 6px; padding: 9px 14px; font-weight: 600; font-size: 11px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+        .btn { border: none; border-radius: 6px; padding: 9px 14px; font-weight: 600; font-size: 11px; cursor: pointer; font-family: var(--display); letter-spacing: 0.06em; white-space: nowrap; }
         .btn:disabled { opacity: 0.5; cursor: wait; }
         .btn-go { background: var(--accent); color: #000; }
         .btn-ask { background: rgba(0, 255, 136, 0.2); color: var(--accent); border: 1px solid rgba(0, 255, 136, 0.35); }
@@ -107,6 +118,7 @@
         .spin { width: 12px; height: 12px; border: 2px solid rgba(0,255,136,0.2); border-top-color: var(--accent); border-radius: 50%; animation: sp .7s linear infinite; }
         @keyframes sp { to { transform: rotate(360deg); } }
         .ask-out { background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 6px; padding: 10px; line-height: 1.5; color: #ccc; }
+        .wait-hint { font-size: 10px; color: var(--muted); margin-top: 6px; }
 
         .tabs { display: flex; gap: 4px; margin-bottom: 6px; }
         .tab { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 4px; padding: 3px 9px; color: var(--muted); font-size: 10px; cursor: pointer; font-family: inherit; }
@@ -133,11 +145,13 @@
         .trace-json { color: #8ecfff; word-break: break-word; }
         .trace-parsed { color: var(--accent); word-break: break-word; }
 
-        .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .login-box { width: 100%; max-width: 340px; padding: 28px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
-        .login-box h1 { color: var(--accent); text-align: center; margin-bottom: 16px; letter-spacing: 3px; }
+        .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .login-box { width: 100%; max-width: 380px; padding: 32px 28px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; backdrop-filter: blur(12px); }
+        .login-brand { font-family: var(--display); font-size: 42px; font-weight: 900; letter-spacing: 0.22em; text-align: center; color: var(--accent); text-shadow: 0 0 24px rgba(0, 255, 136, 0.25); margin-bottom: 10px; }
+        .login-acronym { text-align: center; font-size: 11px; color: var(--muted); line-height: 1.6; margin-bottom: 22px; }
+        .login-acronym b { color: var(--accent); font-weight: 600; }
         .login-box input { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; border: 1px solid var(--border); background: rgba(0,0,0,0.35); color: var(--text); font-family: inherit; }
-        .login-box button { width: 100%; padding: 10px; border: none; border-radius: 6px; background: var(--accent); color: #000; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .login-box button { width: 100%; padding: 11px; border: none; border-radius: 6px; background: var(--accent); color: #000; font-weight: 700; cursor: pointer; font-family: var(--display); letter-spacing: 0.12em; }
     </style>
 </head>
 <body>
@@ -145,9 +159,16 @@
 <script>
 const API = location.origin;
 const POLL_MS = 1000;
+const LOGOUT_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3a1 1 0 0 0-1 1v1H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1h-8zm1 3h6v12h-6V6zm-1 2H6v10h4V8z"/><path d="M14 12h6m0 0-2-2m2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
 
 function showLogin() {
-    app.innerHTML = '<div class="login-wrap"><div class="login-box"><h1>A.W.A.R.E.</h1><input id="pw" type="password" placeholder="password" autofocus><button id="go">Login</button></div></div>';
+    app.innerHTML =
+        '<div class="login-wrap"><div class="login-box">' +
+            '<div class="login-brand">AWARE</div>' +
+            '<div class="login-acronym"><b>A</b>utonomous <b>W</b>itness <b>A</b>nd <b>R</b>esponse <b>E</b>ngine</div>' +
+            '<input id="pw" type="password" placeholder="password" autofocus>' +
+            '<button id="go" type="button">Login</button>' +
+        '</div></div>';
     go.onclick = () => { localStorage.setItem('aware_logged_in', '1'); showDash(); };
     pw.onkeydown = e => { if (e.key === 'Enter') go.click(); };
 }
@@ -155,7 +176,7 @@ function showLogin() {
 function showDash() {
     app.innerHTML =
         '<div class="shell">' +
-        '<header class="topbar"><div class="brand">A.W.A.R.E.</div><span class="pill" id="pConn">offline</span><span class="pill" id="pCam">camera</span><span class="pill" id="pMcu">sensors</span><span class="pill" id="pLlm">llm</span><div class="topbar-right"><button class="logout" id="out">logout</button></div></header>' +
+        '<header class="topbar"><div class="brand">A.W.A.R.E.</div><span class="pill" id="pConn">offline</span><span class="pill" id="pCam">camera</span><span class="pill" id="pMcu">sensors</span><span class="pill" id="pLlm">llm</span><div class="topbar-right"><button class="logout" id="out" type="button" aria-label="Log out" title="Log out">' + LOGOUT_ICON + '</button></div></header>' +
         '<div class="panel witness"><div class="panel-title">Witness</div>' +
             '<div class="witness-grid">' +
                 '<div class="witness-stat hero"><div class="lbl">In frame now</div><div class="num" id="wPeopleFrame">0</div><div class="unit">people</div></div>' +
@@ -243,12 +264,15 @@ function init() {
             },
         },
         plugins: { legend: { display: false } },
-        elements: { line: { borderCapStyle: 'round', borderJoinStyle: 'round' } },
+        elements: {
+            line: { borderCapStyle: 'round', borderJoinStyle: 'round' },
+            point: { radius: 0, hoverRadius: 0, hitRadius: 0, borderWidth: 0 },
+        },
     });
 
     const mk = (id, color) => new Chart(document.getElementById(id).getContext('2d'), {
         type: 'line',
-        data: { labels: [], datasets: [{ data: [], borderColor: color, backgroundColor: color + '18', fill: true, tension: 0.35, pointRadius: 0, borderWidth: 1.5 }] },
+        data: { labels: [], datasets: [{ data: [], borderColor: color, backgroundColor: color + '18', fill: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 0, pointBorderWidth: 0, borderWidth: 1.5 }] },
         options: chartOpts(color),
     });
     const ch = { temperature_c: mk('cT', '#00ff88'), distance_cm: mk('cD', '#66ccff'), movement_intensity: mk('cM', '#ffaa00') };
@@ -300,7 +324,12 @@ function init() {
         const d = await get('/api/snapshot');
         if (!d) { pConn.textContent = 'offline'; pConn.className = 'pill bad'; return; }
         pConn.textContent = 'online'; pConn.className = 'pill ok';
-        vtag.textContent = d.source || '?';
+        const tags = [];
+        const people = (d.detections || []).filter(x => x.label === 'person').length;
+        if (people) tags.push(people + ' person' + (people === 1 ? '' : 's'));
+        const other = (d.detections || []).filter(x => x.label !== 'person').map(x => x.label);
+        if (other.length) tags.push(other.slice(0, 2).join(', '));
+        vtag.textContent = tags.length ? tags.join(' · ') : (d.source || 'live');
         pCam.className = 'pill ' + (String(d.source).includes('yolo') ? 'ok' : 'warn');
     }
 
@@ -344,12 +373,8 @@ function init() {
                 (raw ? ' <a href="#" class="wf-trace" data-id="' + id + '" style="color:var(--muted);font-size:10px">trace</a>' : '') + '</div>' +
                 (raw ? '<div class="trace' + (exp ? ' show' : '') + '" id="' + id + '"><div class="trace-step">LLM</div><div class="trace-json">' + esc(raw) +
                 '</div><div class="trace-step">Parsed</div><div class="trace-parsed">' + esc(JSON.stringify(r.triggers)) + ' → ' + esc(JSON.stringify(r.actions)) +
-                '</div></div>' : '') + '</div><button class="wf-del" data-n="' + esc(r.name) + '">×</button></li>';
+                '</div></div>' : '') + '</div><button type="button" class="wf-del" data-name="' + encodeURIComponent(r.name) + '">×</button></li>';
         }).join('');
-        wfList.querySelectorAll('.wf-del').forEach(b => b.onclick = async () => {
-            await fetch(API + '/rules/' + encodeURIComponent(b.dataset.n), { method: 'DELETE' });
-            pollRules(); pollAct();
-        });
         wfList.querySelectorAll('.wf-trace').forEach(a => a.onclick = e => {
             e.preventDefault();
             const el = document.getElementById(a.dataset.id);
@@ -381,33 +406,79 @@ function init() {
         pLlm.className = 'pill ok';
     }
 
+    if (!wfList._delBound) {
+        wfList._delBound = true;
+        wfList.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.wf-del');
+            if (!btn) return;
+            e.preventDefault();
+            const name = btn.getAttribute('data-name');
+            if (!name) return;
+            await fetch(API + '/rules/' + name, { method: 'DELETE' });
+            pollRules();
+            pollAct();
+        });
+    }
+
+    let waitTimer = null;
+    function startWait(fbEl, label) {
+        const t0 = Date.now();
+        fbEl.innerHTML = '<div class="ask-go"><span class="spin"></span><span class="wait-msg">' + label + ' 0s</span></div><div class="wait-hint">on-device LLM — usually 30–90s, up to 3 min</div>';
+        if (waitTimer) clearInterval(waitTimer);
+        waitTimer = setInterval(() => {
+            const el = fbEl.querySelector('.wait-msg');
+            if (el) el.textContent = label + ' ' + Math.floor((Date.now() - t0) / 1000) + 's';
+        }, 1000);
+    }
+    function stopWait() {
+        if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
+    }
+
     cmdBtn.onclick = async () => {
         const c = cmdIn.value.trim(); if (!c) return;
-        cmdBtn.disabled = true; cmdFb.textContent = 'teaching...';
+        cmdBtn.disabled = true;
+        startWait(cmdFb, 'Teaching');
         try {
             const r = await fetch(API + '/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: c }) });
-            if (r.ok) { cmdIn.value = ''; cmdFb.textContent = '✓ rule created'; cmdFb.style.color = 'var(--accent)'; pollRules(); pollAct(); }
-            else { cmdFb.textContent = '✗ failed'; cmdFb.style.color = 'var(--red)'; }
-        } catch { cmdFb.textContent = '✗ error'; }
+            stopWait();
+            if (r.ok) {
+                const j = await r.json().catch(() => ({}));
+                cmdIn.value = '';
+                const rule = j.rule || j;
+                const when = rule.when_text || rule.when || '';
+                const then = rule.then_text || rule.then || '';
+                cmdFb.innerHTML = when
+                    ? '<div class="ask-out">✓ when ' + esc(when) + ' → ' + esc(then) + '</div>'
+                    : '<div class="ask-out">✓ rule created</div>';
+                pollRules();
+                pollAct();
+            } else {
+                const err = await r.json().catch(() => ({}));
+                cmdFb.innerHTML = '<span style="color:var(--red)">✗ ' + esc(err.detail || 'failed') + '</span>';
+            }
+        } catch {
+            stopWait();
+            cmdFb.innerHTML = '<span style="color:var(--red)">✗ timeout</span>';
+        }
         cmdBtn.disabled = false;
     };
 
-    let askT = null;
     askBtn.onclick = async () => {
         const q = askIn.value.trim(); if (!q) return;
         askBtn.disabled = true;
-        const t0 = Date.now();
-        askFb.innerHTML = '<div class="ask-go"><span class="spin"></span><span id="askT">Thinking... 0s</span></div>';
-        askT = setInterval(() => { const el = document.getElementById('askT'); if (el) el.textContent = 'Thinking... ' + Math.floor((Date.now() - t0) / 1000) + 's'; }, 1000);
+        startWait(askFb, 'Thinking');
         try {
             const r = await fetch(API + '/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q }) });
-            clearInterval(askT);
+            stopWait();
             if (r.ok) {
                 const j = await r.json(); askIn.value = '';
                 askFb.innerHTML = '<div class="ask-out">' + esc(j.answer) + '</div><div class="fb">' + (j.used_llm ? 'LLM' : 'digest') + ' · ' + Math.round((j.latency_ms || 0) / 1000) + 's</div>';
                 pollAct();
             } else askFb.innerHTML = '<span style="color:var(--red)">✗ failed</span>';
-        } catch { clearInterval(askT); askFb.innerHTML = '<span style="color:var(--red)">✗ timeout</span>'; }
+        } catch {
+            stopWait();
+            askFb.innerHTML = '<span style="color:var(--red)">✗ timeout</span>';
+        }
         askBtn.disabled = false;
     };
 
