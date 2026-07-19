@@ -234,6 +234,8 @@ class YOLOCamera:
         self._last_frame = frame
 
         # Preprocess: resize, BGR→RGB, normalize, NCHW
+        # Use OpenCL for image processing when available (Adreno GPU)
+        cv2.ocl.setUseOpenCL(True)
         img = cv2.resize(frame, (320, 320))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255.0
