@@ -91,6 +91,7 @@ class MemorySummarizer:
             period_end=now,
         ) or witness_text
         used_llm = False
+        previous_recap = await self._db.last_summary_narrative() or ""
 
         if self._llm_lock.locked():
             logger.warning("LLM busy — storing witness log without narration")
@@ -98,7 +99,7 @@ class MemorySummarizer:
             try:
                 async with asyncio.timeout(self._llm_timeout):
                     async with self._llm_lock:
-                        llm_text = await self._llm.summarize_period(brief_text)
+                        llm_text = await self._llm.summarize_period(brief_text, previous_recap)
                 if (
                     brief
                     and is_ai_narrative(llm_text)

@@ -30,6 +30,8 @@ async def test_query_memory_stub() -> None:
 
 async def test_summarize_period_stub() -> None:
     llm = StubLLM()
-    digest = "11:15–11:20 | entered: person×1"
+    digest = "12:00:01 person entered frame"
     result = await llm.summarize_period(digest)
-    assert result == digest
+    assert "entered" in result.lower()
+    with_prev = await llm.summarize_period(digest, "Earlier someone passed by.")
+    assert "following" in with_prev.lower() or "entered" in with_prev.lower()

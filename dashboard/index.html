@@ -430,12 +430,15 @@ function init() {
             const res = await fetch(API + '/api/rules/' + id, { method: 'DELETE' });
             if (!res.ok) {
                 btn.disabled = false;
+                btn.textContent = '!';
+                btn.title = 'Delete failed — try again';
                 return;
             }
             pollRules();
             pollAct();
         } catch {
             btn.disabled = false;
+            btn.textContent = '!';
         }
     });
 

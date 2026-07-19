@@ -50,7 +50,9 @@ class StubLLM:
     async def query_memory(self, question: str, context: str) -> str:
         return f"[stub] Based on the log: {context[:200]}...\n\nQ: {question}"
 
-    async def summarize_period(self, digest_text: str) -> str:
+    async def summarize_period(self, digest_text: str, previous_recap: str = "") -> str:
+        if previous_recap and "person" in digest_text:
+            return "Following earlier activity: someone entered the camera frame."
         if "person entered" in digest_text:
             return "Someone entered the camera frame during this period."
         if "heard" in digest_text:

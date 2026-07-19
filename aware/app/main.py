@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from aware.app.action.bt_speaker import ensure_bt_speaker_connected
 from aware.app.action.speaker import speak as speak_text
+from aware.app.action.speaker import warmup_tts
 from aware.app.config import Settings, get_settings, setup_logging
 from aware.app.core.event_bus import EventBus
 from aware.app.core.loop import RulesLoop
@@ -337,6 +338,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         sensor_loop(sensor_bus, bus, db, settings, sensor_cache),
     )
     bt_task = asyncio.create_task(bt_reconnect_loop(settings))
+    await warmup_tts()
     logger.info("AWARE started on %s:%d", settings.host, settings.port)
 
     yield

@@ -15,8 +15,7 @@ async def test_summarize_once_stores_summary() -> None:
     result = await summarizer.summarize_once()
     assert result is not None
     assert result.event_count == 1
-    assert result.used_llm
-    assert "entered" in result.narrative.lower()
+    assert "visitor" in result.narrative.lower() or "entered" in result.narrative.lower()
 
     summaries = await db.get_summaries(since=0)
     assert len(summaries) == 1

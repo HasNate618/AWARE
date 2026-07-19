@@ -172,24 +172,30 @@ class LlamaLLM:
             raw=content[:1000],
         )
 
-    async def summarize_period(self, digest_text: str) -> str:
+    async def summarize_period(self, digest_text: str, previous_recap: str = "") -> str:
         start = time.monotonic()
+        continuity = ""
+        prev = previous_recap.strip()
+        if prev and len(prev) < 300 and " | " not in prev:
+            continuity = f"Previous period recap:\n{prev}\n\n"
         prompt = (
-            "You are AWARE, narrating a hackathon booth like a calm security witness. "
-            "Turn the scene brief into 2 short sentences a human would say aloud. "
-            "Describe what it felt like — who stopped, who passed by, what was heard — "
-            "not a list of counts or sensor numbers. "
-            "You may infer 'someone lingered' or 'steady foot traffic' from the brief. "
-            "Do not mention 'log', 'brief', 'sensor', or 'detection'. "
+            "You are AWARE, an on-device space witness. "
+            "Turn the scene brief into 2 short factual sentences. "
+            "This period follows directly after the previous recap — continue the story, "
+            "do not repeat it verbatim. "
+            "Only describe people in the camera view, sounds heard, and proximity "
+            "to the sensor. Do not invent locations, objects, or appearances. "
+            "Do not mention 'log', 'brief', 'booth', or 'hackathon'. "
             "No questions, tables, or bullet lists.\n\n"
+            f"{continuity}"
             "Brief:\n"
             "Period: 05:02–05:12 (~10 min)\n"
             "Traffic: busy spell — 9 visitors mostly 05:03–05:08\n"
             "Audio: speech (3 events)\n"
-            "Scene: speech overlapped with someone stopping close to the booth around 05:04\n\n"
+            "Scene: speech overlapped with someone moving in close around 05:04\n\n"
             "Narration:\n"
-            "A busy few minutes around five o'clock — several people walked past the booth "
-            "and at least one stopped to talk near the front.\n\n"
+            "A busy few minutes around five — several people passed the camera "
+            "and at least one stopped to speak near the sensor.\n\n"
             f"Brief:\n{digest_text}\n\nNarration:"
         )
         payload = {

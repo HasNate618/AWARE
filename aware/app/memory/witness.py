@@ -176,6 +176,8 @@ def narrative_grounded_in_brief(brief: WitnessBrief, narrative: str) -> bool:
         for phrase in (
             "was empty",
             "booth was empty",
+            "space was empty",
+            "was empty and silent",
             "see no one",
             "no one was",
             "no one stopped",
@@ -370,7 +372,7 @@ def witness_brief_to_text(brief: WitnessBrief) -> str:
 
     if brief.stop_and_talk:
         lines.append(
-            "Scene: speech overlapped with someone stopping close to the booth "
+            "Scene: speech overlapped with someone moving in close "
             f"around {_fmt_clock(brief.stop_and_talk[0])}"
         )
     if brief.temp_shift:
@@ -392,16 +394,14 @@ def witness_prose_from_brief(brief: WitnessBrief) -> str:
     if brief.stop_and_talk:
         when = _fmt_clock(brief.stop_and_talk[0])
         return (
-            f"Around {when}, someone lingered at the booth — speech was picked up "
-            f"as they moved in close to the sensor."
+            f"Around {when}, someone lingered in view — speech was picked up "
+            f"as they moved closer to the sensor."
         )
 
     if visitors >= 8:
         start = _fmt_clock(min(brief.visitor_times))
         end = _fmt_clock(max(brief.visitor_times))
-        base = (
-            f"A busy stretch from {start} to {end} with steady foot traffic past the booth"
-        )
+        base = f"A busy stretch from {start} to {end} with steady foot traffic past the camera"
         if sounds:
             return f"{base}; voices were heard in the space a few times."
         return f"{base}."
@@ -411,7 +411,7 @@ def witness_prose_from_brief(brief: WitnessBrief) -> str:
             label = sound_labels[0] if len(sound_labels) == 1 else "voices"
             return (
                 f"Several people passed through between {window} and {label} "
-                f"was heard — the booth saw regular walk-by traffic."
+                f"was heard — regular walk-by traffic in view."
             )
         return f"Several people passed the camera during {window}, but it stayed quiet."
 
@@ -424,7 +424,7 @@ def witness_prose_from_brief(brief: WitnessBrief) -> str:
 
     if visitors == 1 and brief.approaches:
         when = _fmt_clock(brief.approaches[0][0])
-        return f"Someone approached the booth around {when} without much audio activity."
+        return f"Someone moved closer around {when} without much audio activity."
 
     if visitors == 1:
         when = _fmt_clock(brief.visitor_times[0])
@@ -441,18 +441,18 @@ def witness_prose_from_brief(brief: WitnessBrief) -> str:
     if sounds == 1:
         when = _fmt_clock(brief.sounds[0][0])
         label = brief.sounds[0][1]
-        return f"The booth was otherwise quiet — {label} was heard once around {when}."
+        return f"It was otherwise quiet — {label} was heard once around {when}."
 
     if sounds > 1:
         return (
-            f"Conversation or noise in the space during {window} "
+            f"Conversation or noise during {window} "
             f"({'speech' if 'speech' in sound_labels else ', '.join(sound_labels)}), "
             f"without much camera traffic."
         )
 
     if brief.approaches:
         when = _fmt_clock(brief.approaches[0][0])
-        return f"Movement near the booth around {when} — someone came in close to the sensor."
+        return f"Movement around {when} — someone came in close to the sensor."
 
     if brief.temp_shift:
         prev, val = brief.temp_shift
@@ -525,9 +525,8 @@ def _is_template_prose(text: str) -> bool:
         "passed by during",
         "foot traffic",
         "busy stretch",
-        "lingered at the booth",
-        "lone visitor",
-        "booth was otherwise quiet",
+        "lingered in view",
+        "was otherwise quiet",
         "moved in toward the sensor",
         "moved in close",
         "walk-by traffic",

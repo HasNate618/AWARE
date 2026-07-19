@@ -75,7 +75,7 @@ def test_narrative_grounded_in_brief() -> None:
     )
     brief = build_witness_brief(events, 100.0, 200.0)
     assert brief is not None
-    assert not narrative_grounded_in_brief(brief, "A quiet few minutes — the booth was empty.")
+    assert not narrative_grounded_in_brief(brief, "A quiet few minutes — the space was empty.")
     assert narrative_grounded_in_brief(
         brief,
         "Speech was heard in the space a couple of times.",
@@ -123,7 +123,7 @@ def test_witness_prose_from_events() -> None:
     ]
     log = build_witness_log(events)
     prose = witness_prose_from_events(log, period_start=100.0, period_end=200.0)
-    assert "lingered" in prose.lower() or "speech" in prose.lower()
+    assert "lingered" in prose.lower() or "speech" in prose.lower() or "closer" in prose.lower()
 
 
 def test_witness_brief_stop_and_talk() -> None:
@@ -141,7 +141,7 @@ def test_witness_brief_stop_and_talk() -> None:
     assert brief is not None
     assert brief.stop_and_talk
     prose = witness_prose_from_brief(brief)
-    assert "lingered" in prose or "moved in close" in prose
+    assert "lingered" in prose or "moved in close" in prose or "closer" in prose
 
 
 def test_summaries_for_witness_display_filters_noise() -> None:

@@ -50,6 +50,8 @@ class RulesStore:
 
     async def open(self) -> None:
         self._db = await aiosqlite.connect(self._db_path)
+        await self._db.execute("PRAGMA journal_mode=WAL")
+        await self._db.execute("PRAGMA busy_timeout=5000")
         await self._db.execute(_CREATE_TABLE)
         # Migrate: add llm_raw if missing (pre-existing DBs)
         with contextlib.suppress(aiosqlite.OperationalError):

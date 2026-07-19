@@ -260,6 +260,18 @@ class EventDB:
             return float(row[0])
         return None
 
+    async def last_summary_narrative(self) -> str | None:
+        """Most recent stored recap for witness continuity."""
+        if not self._db:
+            raise RuntimeError("Database not opened")
+        cursor = await self._db.execute(
+            "SELECT narrative FROM summaries ORDER BY period_end DESC LIMIT 1",
+        )
+        row = await cursor.fetchone()
+        if row and row[0]:
+            return str(row[0]).strip()
+        return None
+
     async def store_summary(
         self,
         period_start: float,
