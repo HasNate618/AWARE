@@ -115,11 +115,22 @@ class EventDB:
         await self._db.execute(_CREATE_SUMMARIES_INDEX)
         await self._db.commit()
 
+    @property
+    def connection(self) -> aiosqlite.Connection:
+        if not self._db:
+            raise RuntimeError("Database not opened")
+        return self._db
+
     async def close(self) -> None:
         if self._db:
             await self.flush()
             await self._db.close()
             self._db = None
+
+    async def note_external_commit(self) -> None:
+        """Reset batching state after another layer commits on the shared connection."""
+        self._dirty = False
+        self._last_commit = time.time()
 
     async def flush(self) -> None:
         if self._db and self._dirty:

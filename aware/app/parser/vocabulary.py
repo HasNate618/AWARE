@@ -104,6 +104,8 @@ COLORS: Final[dict[str, tuple[int, int, int]]] = {
 }
 
 TRANSITIONS: Final[dict[str, str]] = {
+    "detected": "enter",
+    "detects": "enter",
     "enters": "enter",
     "entered": "enter",
     "comes in": "enter",
@@ -117,6 +119,16 @@ TRANSITIONS: Final[dict[str, str]] = {
     "walks out": "exit",
     "departs": "exit",
 }
+
+# Explicit presence — fire while label stays in frame (no enter/exit edge).
+PRESENCE_PHRASES: Final[tuple[str, ...]] = (
+    "in frame",
+    "in view",
+    "visible",
+    "present",
+    "still there",
+    "while ",
+)
 
 # Sensor conditions: keyword -> (sensor_key, operator, default_threshold)
 # Operators: "lt" (less than), "gt" (greater than)

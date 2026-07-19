@@ -5,6 +5,7 @@ import json
 import logging
 import random
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import aiosqlite
@@ -47,21 +48,44 @@ class RulesStore:
     def __init__(self, db_path: str | Path = ":memory:") -> None:
         self._db_path = str(db_path)
         self._db: aiosqlite.Connection | None = None
+        self._owns_connection = True
+        self._on_commit: Callable[[], Awaitable[None]] | None = None
 
-    async def open(self) -> None:
-        self._db = await aiosqlite.connect(self._db_path)
-        await self._db.execute("PRAGMA journal_mode=WAL")
-        await self._db.execute("PRAGMA busy_timeout=5000")
+    async def open(
+        self,
+        connection: aiosqlite.Connection | None = None,
+        on_commit: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
+        if connection is not None:
+            self._db = connection
+            self._owns_connection = False
+            self._on_commit = on_commit
+        else:
+            self._db = await aiosqlite.connect(self._db_path)
+            self._owns_connection = True
+            self._on_commit = None
+            await self._db.execute("PRAGMA journal_mode=WAL")
+            await self._db.execute("PRAGMA busy_timeout=5000")
         await self._db.execute(_CREATE_TABLE)
         # Migrate: add llm_raw if missing (pre-existing DBs)
         with contextlib.suppress(aiosqlite.OperationalError):
             await self._db.execute("ALTER TABLE rules ADD COLUMN llm_raw TEXT NOT NULL DEFAULT ''")
-        await self._db.commit()
+        if self._owns_connection:
+            await self._db.commit()
 
     async def close(self) -> None:
-        if self._db:
+        if self._db and self._owns_connection:
             await self._db.close()
-            self._db = None
+        self._db = None
+        self._owns_connection = True
+        self._on_commit = None
+
+    async def _commit(self) -> None:
+        if not self._db:
+            raise RuntimeError("Store not opened")
+        await self._db.commit()
+        if self._on_commit is not None:
+            await self._on_commit()
 
     async def add(
         self,
@@ -92,7 +116,7 @@ class RulesStore:
                         time.time(),
                     ),
                 )
-                await self._db.commit()
+                await self._commit()
                 return final_name
             except aiosqlite.IntegrityError:
                 if attempt < 4:
@@ -127,7 +151,7 @@ class RulesStore:
         if not self._db:
             raise RuntimeError("Store not opened")
         cursor = await self._db.execute(_DELETE, (name,))
-        await self._db.commit()
+        await self._commit()
         return int(cursor.rowcount or 0) > 0
 
     async def deactivate_by_id(self, rule_id: int) -> str | None:
@@ -142,5 +166,5 @@ class RulesStore:
             return None
         name = str(row[0])
         await self._db.execute(_DELETE, (name,))
-        await self._db.commit()
+        await self._commit()
         return name

@@ -107,12 +107,12 @@ class RulesEngine:
         if t_type == "detection":
             if t_transition == "enter":
                 return t_value in snapshot.entered
-            elif t_transition == "exit":
+            if t_transition == "exit":
                 return t_value in snapshot.exited
-            # No transition: match any current detection (existing behavior)
-            if focus and focus.label == t_value:
-                return True
-            return any(d.label == t_value for d in snapshot.detections)
+            if t_transition == "present":
+                return any(d.label == t_value for d in snapshot.detections)
+            # Legacy rules without transition: enter edge only (not sustained presence)
+            return t_value in snapshot.entered
         elif t_type == "sound":
             if focus and focus.label == t_value:
                 return True

@@ -151,6 +151,59 @@ _INVENTED_DETAIL_RE = re.compile(
 )
 
 
+def is_brief_dump(text: str) -> bool:
+    """Structured scene brief echoed as narrative — not display-ready prose."""
+    lower = text.lower()
+    return "traffic:" in lower and ("period:" in lower or "audio:" in lower)
+
+
+def prose_from_brief_dump(text: str) -> str:
+    """Turn a stored brief-format recap into readable witness prose."""
+    if not is_brief_dump(text):
+        return ""
+    visitors = 0
+    count_match = re.search(r"(\d+)\s+visitors?", text, re.I)
+    if count_match:
+        visitors = int(count_match.group(1))
+    elif re.search(r"\bone visitor\b", text, re.I):
+        visitors = 1
+    has_speech = "speech" in text.lower()
+    times = re.findall(r"(\d{2}:\d{2}:\d{2})", text)
+    period_match = re.search(r"Period:\s*(\d{2}:\d{2}–\d{2}:\d{2})", text)
+    window = period_match.group(1) if period_match else ""
+
+    if visitors >= 8:
+        start = times[0] if times else ""
+        end = times[-1] if len(times) >= 2 else start
+        base = (
+            f"A concentrated burst between {start} and {end}: "
+            f"the on-device camera logged {visitors} people passing through"
+        )
+        return f"{base}, with speech detected on the mic." if has_speech else f"{base}."
+
+    if visitors >= 2:
+        line = f"{visitors} people crossed the camera view"
+        if window:
+            line += f" during {window}"
+        if has_speech:
+            return f"{line}; speech was detected on the on-board mic."
+        return f"{line}."
+
+    if visitors == 1:
+        when = times[0] if times else ""
+        if has_speech:
+            return (
+                f"One person passed the camera around {when}; "
+                f"speech was detected on the on-board mic."
+            )
+        return f"One person passed the camera around {when}."
+
+    if has_speech:
+        when = times[0] if times else ""
+        return f"No camera traffic, but speech was picked up around {when}."
+    return ""
+
+
 def is_hallucinated_narrative(text: str) -> bool:
     """Obvious fiction — roleplay, dialogue, or details we never observed."""
     narrative = text.strip()
@@ -165,6 +218,10 @@ def is_hallucinated_narrative(text: str) -> bool:
 def narrative_grounded_in_brief(brief: WitnessBrief, narrative: str) -> bool:
     """True when LLM prose matches what the brief actually recorded."""
     if is_hallucinated_narrative(narrative):
+        return False
+    if is_brief_dump(narrative):
+        return False
+    if "booth" in narrative.lower():
         return False
 
     lower = narrative.lower()
@@ -210,6 +267,10 @@ def is_ai_narrative(text: str) -> bool:
     if len(narrative) < 12 or len(narrative) > 280:
         return False
     if is_hallucinated_narrative(narrative):
+        return False
+    if is_brief_dump(narrative):
+        return False
+    if "booth" in narrative.lower():
         return False
     if _LLM_JUNK_RE.search(narrative):
         return False
@@ -334,6 +395,94 @@ def build_witness_brief(
     return brief
 
 
+def brief_significance_score(brief: WitnessBrief) -> int:
+    """Higher = more worth a headline recap (not live-activity noise)."""
+    score = 0
+    visitors = len(brief.visitor_times)
+    sounds = len(brief.sounds)
+    if visitors >= 8:
+        score += 12
+    elif visitors >= 3:
+        score += 8
+    elif visitors == 2:
+        score += 4
+    elif visitors == 1:
+        score += 1
+    if sounds:
+        score += 5
+    if brief.stop_and_talk:
+        score += 8
+    if brief.approaches:
+        score += 6
+    if brief.movement_noted:
+        score += 3
+    if brief.temp_shift:
+        score += 2
+    return score
+
+
+def witness_period_significant(brief: WitnessBrief) -> bool:
+    """Only create a recap for periods worth a headline."""
+    return brief_significance_score(brief) >= 6
+
+
+_LOW_QUALITY_RECAP_RE = re.compile(
+    r"(?i)"
+    r"^(one person passed the camera around \d{2}:\d{2}:\d{2}\.?|"
+    r"a person was detected on camera\.?|"
+    r"\d+ visitors? between )"
+)
+
+
+def is_low_quality_recap(text: str) -> bool:
+    """Tally dumps, brief echoes, and lone walk-bys belong in live activity only."""
+    narrative = text.strip()
+    if not narrative:
+        return True
+    if is_brief_dump(narrative):
+        return False
+    lower = narrative.lower()
+    if "traffic:" in lower or "proximity:" in lower or "environment:" in lower:
+        return True
+    if _LOW_QUALITY_RECAP_RE.match(narrative):
+        return True
+    return len(narrative) < 24 and "visitor" not in lower and "people" not in lower
+
+
+def recap_display_score(text: str, digest: str = "") -> int:
+    """Rank recaps for the dashboard — show only the most notable."""
+    if digest:
+        events: list[WitnessEvent] = []
+        for line in digest.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            ts = _parse_event_timestamp(stripped) or 0.0
+            if "person entered frame" in stripped:
+                kind = "person"
+            elif " heard" in stripped:
+                kind = "sound"
+            else:
+                kind = "sensor"
+            events.append(WitnessEvent(timestamp=ts, line=stripped, kind=kind))
+        if events:
+            brief = build_witness_brief(events, events[0].timestamp, events[-1].timestamp)
+            if brief:
+                return brief_significance_score(brief)
+
+    score = 0
+    lower = text.lower()
+    if re.search(r"\d+ people|\d+ visitors|concentrated burst|busy", lower):
+        score += 10
+    if any(word in lower for word in ("speech", "voice", "mic", "spoke", "talk")):
+        score += 5
+    if any(word in lower for word in ("closer", "sensor", "lingered", "approach")):
+        score += 5
+    if is_low_quality_recap(text):
+        score = min(score, 2)
+    return score
+
+
 def witness_brief_to_text(brief: WitnessBrief) -> str:
     """Semantic brief for the LLM — patterns, not raw event dumps."""
     lines = [f"Period: {brief.period_label} (~{brief.period_minutes} min)"]
@@ -395,69 +544,72 @@ def witness_prose_from_brief(brief: WitnessBrief) -> str:
         when = _fmt_clock(brief.stop_and_talk[0])
         return (
             f"Around {when}, someone lingered in view — speech was picked up "
-            f"as they moved closer to the sensor."
+            f"on the on-board mic as they moved closer to the sensor."
         )
 
     if visitors >= 8:
         start = _fmt_clock(min(brief.visitor_times))
         end = _fmt_clock(max(brief.visitor_times))
-        base = f"A busy stretch from {start} to {end} with steady foot traffic past the camera"
+        base = (
+            f"A concentrated burst between {start} and {end}: "
+            f"the on-device camera logged {visitors} people passing through"
+        )
         if sounds:
-            return f"{base}; voices were heard in the space a few times."
+            return f"{base}, with speech detected on the mic."
         return f"{base}."
 
     if visitors >= 3:
         if sounds:
-            label = sound_labels[0] if len(sound_labels) == 1 else "voices"
+            label = "speech" if "speech" in sound_labels else sound_labels[0]
             return (
-                f"Several people passed through between {window} and {label} "
-                f"was heard — regular walk-by traffic in view."
+                f"Between {window}, {visitors} people crossed the camera view "
+                f"and {label} was detected on the on-board mic."
             )
-        return f"Several people passed the camera during {window}, but it stayed quiet."
+        return f"Between {window}, {visitors} people crossed the camera view."
 
     if visitors == 1 and sounds and brief.approaches:
         when = _fmt_clock(brief.visitor_times[0])
         return (
-            f"A lone visitor around {when} stopped in view, spoke briefly, "
+            f"Around {when}, one person stopped in view, spoke briefly, "
             f"and moved in toward the sensor."
         )
 
     if visitors == 1 and brief.approaches:
         when = _fmt_clock(brief.approaches[0][0])
-        return f"Someone moved closer around {when} without much audio activity."
+        return f"Someone moved closer to the sensor around {when} without much audio activity."
 
     if visitors == 1:
         when = _fmt_clock(brief.visitor_times[0])
-        return f"A single visitor passed the camera around {when}."
+        return f"One person passed the camera around {when}."
 
     if visitors == 2:
         if sounds:
+            label = "speech" if "speech" in sound_labels else sound_labels[0]
             return (
-                f"A pair of visitors during {window}; "
-                f"{'speech' if 'speech' in sound_labels else sound_labels[0]} was heard."
+                f"Two people passed the camera during {window}; "
+                f"{label} was detected on the on-board mic."
             )
-        return f"Two people passed by during {window}."
+        return f"Two people passed the camera during {window}."
 
     if sounds == 1:
         when = _fmt_clock(brief.sounds[0][0])
         label = brief.sounds[0][1]
-        return f"It was otherwise quiet — {label} was heard once around {when}."
+        return f"No camera traffic, but {label} was picked up around {when}."
 
     if sounds > 1:
+        label = "speech" if "speech" in sound_labels else ", ".join(sound_labels)
         return (
-            f"Conversation or noise during {window} "
-            f"({'speech' if 'speech' in sound_labels else ', '.join(sound_labels)}), "
-            f"without much camera traffic."
+            f"Audio activity during {window} ({label}) without much camera traffic."
         )
 
     if brief.approaches:
         when = _fmt_clock(brief.approaches[0][0])
-        return f"Movement around {when} — someone came in close to the sensor."
+        return f"Movement near the sensor around {when} — someone moved in close."
 
     if brief.temp_shift:
         prev, val = brief.temp_shift
         direction = "warmed" if val > prev else "cooled"
-        return f"The space {direction} a little during {window} ({prev:.1f}°C to {val:.1f}°C)."
+        return f"The space {direction} slightly during {window} ({prev:.1f}°C to {val:.1f}°C)."
 
     return ""
 
@@ -521,19 +673,33 @@ def _suspect_false_quiet(narrative: str) -> bool:
 def _is_template_prose(text: str) -> bool:
     markers = (
         "passed the camera",
-        "passed through",
-        "passed by during",
-        "foot traffic",
-        "busy stretch",
+        "crossed the camera view",
+        "on-device camera",
+        "on-board mic",
+        "concentrated burst",
         "lingered in view",
-        "was otherwise quiet",
         "moved in toward the sensor",
         "moved in close",
-        "walk-by traffic",
         "The space warmed",
         "The space cooled",
     )
     return any(marker in text for marker in markers)
+
+
+def _booth_fallback_prose(narrative: str) -> str:
+    """Rewrite legacy booth-framed LLM lines into neutral witness prose."""
+    lower = narrative.lower()
+    if "booth" not in lower:
+        return ""
+    has_person = any(word in lower for word in ("person", "people", "visitor", "someone"))
+    has_speech = "speech" in lower or "heard" in lower or "voice" in lower
+    if has_person and has_speech:
+        return "A person was detected on camera and speech was picked up on the on-board mic."
+    if has_person:
+        return "A person was detected on camera."
+    if has_speech:
+        return "Speech was picked up on the on-board mic."
+    return "Activity was detected on the on-device sensors."
 
 
 def format_period_label(start: float, end: float) -> str:
@@ -546,39 +712,63 @@ def format_period_label(start: float, end: float) -> str:
 def summaries_for_witness_display(
     summaries: list[dict[str, object]],
     *,
-    limit: int = 12,
+    limit: int = 3,
 ) -> list[dict[str, object]]:
-    """Return witness recaps for the dashboard (LLM prose or contextual template fallback)."""
-    logs: list[dict[str, object]] = []
+    """Return the most notable witness recaps for a quick-glance summary."""
+    candidates: list[dict[str, object]] = []
     for row in summaries:
         narrative = str(row.get("narrative", "")).strip()
         if not narrative:
             continue
-        if _is_template_prose(narrative):
+        digest = str(row.get("digest", "")).strip()
+        if is_brief_dump(narrative):
+            text = prose_from_brief_dump(narrative)
+            ai = False
+        elif "booth" in narrative.lower() or is_hallucinated_narrative(narrative):
+            text = (
+                prose_from_brief_dump(narrative)
+                or witness_prose_from_log_text(digest)
+                or witness_prose_from_log_text(narrative)
+                or _booth_fallback_prose(narrative)
+            )
+            ai = False
+        elif _is_template_prose(narrative):
             text = narrative
             ai = False
-        elif is_hallucinated_narrative(narrative) or _suspect_false_quiet(narrative):
-            text = witness_prose_from_log_text(narrative)
+        elif _suspect_false_quiet(narrative):
+            text = witness_prose_from_log_text(digest) or witness_prose_from_log_text(narrative)
             if not text:
                 continue
             ai = False
-        elif is_ai_narrative(narrative):
+        elif is_ai_narrative(narrative) and not is_low_quality_recap(narrative):
             text = narrative
             ai = True
         else:
-            text = witness_prose_from_log_text(narrative)
+            text = witness_prose_from_log_text(digest) or witness_prose_from_log_text(narrative)
             ai = False
-        if not text:
+        if not text or is_low_quality_recap(text):
             continue
         period_start = float(str(row.get("period_start", 0)))
         period_end = float(str(row.get("period_end", 0)))
-        logs.append(
+        candidates.append(
             {
                 "period_start": period_start,
                 "period_end": period_end,
                 "period_label": format_period_label(period_start, period_end),
                 "text": text,
                 "ai": ai,
+                "_score": recap_display_score(text, digest),
             }
         )
-    return logs[-limit:]
+
+    candidates.sort(
+        key=lambda row: (float(str(row["_score"])), float(str(row["period_end"]))),
+        reverse=True,
+    )
+    logs: list[dict[str, object]] = []
+    for row in candidates[:limit]:
+        row = dict(row)
+        row.pop("_score", None)
+        logs.append(row)
+    logs.sort(key=lambda row: float(str(row["period_end"])))
+    return logs

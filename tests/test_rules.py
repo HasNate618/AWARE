@@ -1,4 +1,26 @@
+from aware.app.memory.db import EventDB
 from aware.app.rules.store import RulesStore
+
+
+async def test_shared_connection_with_event_log(tmp_path) -> None:
+    """Rules and events on the same file must share one SQLite connection."""
+    db_path = tmp_path / "aware.db"
+    db = EventDB(db_path)
+    await db.open()
+    store = RulesStore(db_path)
+    await store.open(connection=db.connection, on_commit=db.note_external_commit)
+
+    await db.log("detection_enter", {"label": "person", "confidence": 0.9})
+    name = await store.add("person_rule", "person", "log event", "normal", [], [])
+    assert name == "person_rule"
+
+    rules = await store.get_active()
+    assert len(rules) == 1
+    deleted = await store.deactivate_by_id(int(rules[0]["id"]))
+    assert deleted == "person_rule"
+
+    await store.close()
+    await db.close()
 
 
 async def test_add_and_get_active(store: RulesStore) -> None:

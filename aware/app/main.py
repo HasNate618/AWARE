@@ -275,7 +275,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         logger.info("Using stub LLM (no server configured)")
 
     await db.open()
-    await store.open()
+    await store.open(connection=db.connection, on_commit=db.note_external_commit)
     await engine.start()
 
     app.state.bus = bus
@@ -327,6 +327,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
             interval_seconds=float(settings.memory_summary_interval),
             llm_lock=llm_lock,
             llm_timeout=min(settings.llm_timeout, 120.0),
+            use_llm=settings.memory_summary_use_llm,
         )
         summarizer_task = asyncio.create_task(summarizer.run())
 
@@ -481,6 +482,7 @@ async def venue_stats(window: int = 3600) -> dict[str, object]:
     """Witness counters and AI-generated log entries for the venue panel."""
     db: EventDB = app.state.db
     camera: PerceptionSource = app.state.camera
+    settings: Settings = app.state.settings
 
     now = time.time()
     start = now - window
@@ -500,7 +502,10 @@ async def venue_stats(window: int = 3600) -> dict[str, object]:
 
     window_events = await db.query_range(start, now)
     summaries = await db.get_summaries(since=start, until=now)
-    witness_recaps = summaries_for_witness_display(summaries)
+    witness_recaps = summaries_for_witness_display(
+        summaries,
+        limit=settings.memory_summary_display_limit,
+    )
     witness_activity = witness_events_for_display(build_witness_log(window_events))
 
     return {

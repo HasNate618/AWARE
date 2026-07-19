@@ -8,7 +8,15 @@ def test_parse_sound_trigger() -> None:
 
 def test_parse_detection_trigger() -> None:
     rule = parse_rule("person_alert", "when someone walks in", "flash green")
-    assert any(t.type == "detection" and t.value == "person" for t in rule.triggers)
+    det = next(t for t in rule.triggers if t.type == "detection")
+    assert det.value == "person"
+    assert det.transition == "enter"
+
+
+def test_parse_person_detected_defaults_to_enter() -> None:
+    rule = parse_rule_from_command("when person detected say happy hacking")
+    det = next(t for t in rule.triggers if t.type == "detection")
+    assert det.transition == "enter"
 
 
 def test_parse_time_trigger() -> None:

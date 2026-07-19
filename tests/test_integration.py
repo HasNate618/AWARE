@@ -93,6 +93,7 @@ async def test_rules_engine_matches_detection(
     snapshot = PerceptionSnapshot(
         detections=[Detection(label="person", confidence=0.95)],
         sounds=[],
+        entered=["person"],
         source="test",
         timestamp=1234567890.0,
     )
@@ -102,6 +103,18 @@ async def test_rules_engine_matches_detection(
     assert len(actions_received) == 1
     assert actions_received[0]["rule"] == "person_greet"
     assert actions_received[0]["action"] == "speak"
+
+    # Same person still in frame — should not fire again
+    snapshot_still = PerceptionSnapshot(
+        detections=[Detection(label="person", confidence=0.95)],
+        sounds=[],
+        entered=[],
+        source="test",
+        timestamp=1234567891.0,
+    )
+    await bus.publish("perception", {"snapshot": snapshot_still})
+    await engine.evaluate()
+    assert len(actions_received) == 1
 
     await engine.stop()
 
@@ -325,6 +338,7 @@ async def test_and_conditions_both_must_match(
     snapshot3 = PerceptionSnapshot(
         detections=[Detection(label="person", confidence=0.9)],
         sounds=[Detection(label="doorbell", confidence=0.9)],
+        entered=["person"],
         source="test",
         timestamp=1234567890.0,
     )

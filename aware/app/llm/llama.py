@@ -212,12 +212,12 @@ class LlamaLLM:
             content = str(data.get("content", "")).strip()
             elapsed = (time.monotonic() - start) * 1000
             self._stats.record(elapsed, bool(content))
-            return content or digest_text
+            return content or ""
         except Exception:
             elapsed = (time.monotonic() - start) * 1000
             self._stats.record(elapsed, False)
             logger.exception("LLM summarize_period failed")
-            return digest_text
+            return ""
 
     async def query_memory(self, question: str, context: str) -> str:
         start = time.monotonic()

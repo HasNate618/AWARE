@@ -12,9 +12,11 @@ from aware.app.memory.witness import (
     build_witness_brief,
     build_witness_log,
     is_ai_narrative,
+    is_brief_dump,
     narrative_grounded_in_brief,
     witness_brief_to_text,
     witness_log_to_text,
+    witness_period_significant,
     witness_prose_from_events,
 )
 
@@ -40,12 +42,14 @@ class MemorySummarizer:
         interval_seconds: float = 300.0,
         llm_lock: asyncio.Lock | None = None,
         llm_timeout: float = 120.0,
+        use_llm: bool = False,
     ) -> None:
         self._db = db
         self._llm = llm
         self._interval = interval_seconds
         self._llm_lock = llm_lock or asyncio.Lock()
         self._llm_timeout = llm_timeout
+        self._use_llm = use_llm
 
     async def run(self) -> None:
         logger.info("Memory summarizer started (interval=%ds)", int(self._interval))
@@ -84,6 +88,12 @@ class MemorySummarizer:
         witness_text = witness_log_to_text(witness_events)
         digest = build_digest(events)
         brief = build_witness_brief(witness_events, last_end, now)
+        if brief and not witness_period_significant(brief):
+            digest_json = witness_text or (digest_to_json(digest) if digest is not None else "")
+            await self._db.store_summary(last_end, now, digest_json, "", len(events))
+            logger.debug("Skipped low-significance witness period")
+            return None
+
         brief_text = witness_brief_to_text(brief) if brief else witness_text
         narrative = witness_prose_from_events(
             witness_events,
@@ -93,15 +103,17 @@ class MemorySummarizer:
         used_llm = False
         previous_recap = await self._db.last_summary_narrative() or ""
 
-        if self._llm_lock.locked():
+        if self._use_llm and self._llm_lock.locked():
             logger.warning("LLM busy — storing witness log without narration")
-        else:
+        elif self._use_llm:
             try:
                 async with asyncio.timeout(self._llm_timeout):
                     async with self._llm_lock:
                         llm_text = await self._llm.summarize_period(brief_text, previous_recap)
                 if (
-                    brief
+                    llm_text
+                    and brief
+                    and not is_brief_dump(llm_text)
                     and is_ai_narrative(llm_text)
                     and narrative_grounded_in_brief(brief, llm_text)
                 ):
@@ -112,7 +124,7 @@ class MemorySummarizer:
             except Exception:
                 logger.exception("LLM summarization failed — using witness log fallback")
 
-        digest_json = digest_to_json(digest) if digest is not None else witness_text
+        digest_json = witness_text or (digest_to_json(digest) if digest is not None else "")
         await self._db.store_summary(
             last_end,
             now,

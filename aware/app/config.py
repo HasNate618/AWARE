@@ -57,8 +57,10 @@ class Settings(BaseSettings):
     rules_tick_ms: int = 500
     sensor_read_interval: float = 1.0
     sensor_log_interval: float = 30.0
-    memory_summary_interval: int = 300
+    memory_summary_interval: int = 900
     memory_summary_enabled: bool = True
+    memory_summary_use_llm: bool = False
+    memory_summary_display_limit: int = 3
     memory_context_max_chars: int = 6000
     memory_default_window: int = 3600
     tts_engine: str = "piper"  # espeak | piper

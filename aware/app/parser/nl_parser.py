@@ -54,15 +54,20 @@ def parse_when(text: str, raw: str | None = None) -> list[Trigger]:
 
     # Use raw input for transition detection if available (LLM may strip transitions)
     transition_source = (raw or text).lower()
+    wants_presence = any(phrase in transition_source for phrase in vocab.PRESENCE_PHRASES)
 
     for part in parts:
         part_lower = part
         # Detect transition keyword across the full raw command
         trans: str | None = None
-        for kw, t in vocab.TRANSITIONS.items():
-            if kw in transition_source:
-                trans = t
-                break
+        if not wants_presence:
+            for kw, t in vocab.TRANSITIONS.items():
+                if kw in transition_source:
+                    trans = t
+                    break
+            # Bare object match ("person", "someone") defaults to enter edge
+            if trans is None and any(kw in part_lower for kw in vocab.OBJECTS):
+                trans = "enter"
         # Find sounds in this part
         for keyword, label in vocab.SOUNDS.items():
             if keyword in part_lower:

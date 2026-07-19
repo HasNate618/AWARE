@@ -8,6 +8,7 @@ import re
 import subprocess
 import tempfile
 import time
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -52,8 +53,8 @@ def _load_piper_voice(model_path: Path) -> Any:
 
 def _synthesize_piper(text: str, model_path: Path, wav_path: Path) -> None:
     voice = _load_piper_voice(model_path)
-    with wav_path.open("wb") as wav_file:
-        voice.synthesize(text, wav_file)
+    with wave.open(str(wav_path), "wb") as wav_file:
+        voice.synthesize_wav(text, wav_file)
 
 
 def _synthesize_to_file(text: str, wav_path: Path) -> None:
@@ -137,6 +138,13 @@ async def speak(text: str) -> None:
     try:
         await asyncio.to_thread(_synthesize_to_file, text, wav_path)
 
+        def _wav_ok() -> bool:
+            return wav_path.is_file() and wav_path.stat().st_size >= 100
+
+        if not await asyncio.to_thread(_wav_ok):
+            logger.error("TTS produced empty audio for: %s", text)
+            return
+
         await asyncio.to_thread(_set_bt_volume, settings.bt_speaker_volume)
         proc = await asyncio.create_subprocess_exec(
             "aplay",
@@ -144,9 +152,17 @@ async def speak(text: str) -> None:
             "bluealsa",
             str(wav_path),
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
-        await proc.wait()
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            logger.warning(
+                "aplay failed (rc=%s) for %r: %s",
+                proc.returncode,
+                text,
+                stderr.decode(errors="replace").strip(),
+            )
+            return
         logger.info("Spoke (%s): %s", settings.tts_engine, text)
 
     except FileNotFoundError as exc:

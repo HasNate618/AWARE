@@ -185,8 +185,8 @@ function showDash() {
                 '<div class="witness-stat"><div class="lbl">Passed by</div><div class="num" id="wPeoplePassed">0</div><div class="unit" id="wWindowLbl">last hour</div></div>' +
                 '<div class="witness-stat"><div class="lbl">Sounds heard</div><div class="num" id="wSoundTotal">0</div><div class="unit" id="wSoundBreakdown">—</div></div>' +
             '</div>' +
-            '<div class="witness-recap-lbl ai">AI witness</div>' +
-            '<ul class="list witness-log" id="wWitnessRecap"><li style="color:var(--muted)">waiting for recap…</li></ul>' +
+            '<div class="witness-recap-lbl">Period recap</div>' +
+            '<ul class="list witness-log" id="wWitnessRecap"><li style="color:var(--muted)">notable moments appear here (~15 min)</li></ul>' +
             '<div class="witness-recap-lbl">Live activity</div>' +
             '<ul class="list witness-log" id="wWitnessLog"><li style="color:var(--muted)">waiting for activity…</li></ul>' +
         '</div>' +
@@ -354,10 +354,10 @@ function init() {
         wWitnessRecap.innerHTML = recaps.length
             ? recaps.slice().reverse().map(e =>
                 '<li><span class="witness-time">' + esc(e.period_label || '') +
-                (e.ai ? '' : ' · auto') + '</span>' +
+                (e.ai ? ' · AI' : '') + '</span>' +
                 '<span class="witness-text">' + esc(String(e.text || '')) + '</span></li>'
             ).join('')
-            : '<li style="color:var(--muted)">no AI recap yet — updates every ~5 min when people, sounds, or sensors change</li>';
+            : '<li style="color:var(--muted)">no notable periods in the last hour — see live activity below</li>';
         const activity = d.witness_activity || d.witness_logs || [];
         wWitnessLog.innerHTML = activity.length
             ? activity.slice().reverse().map(e =>

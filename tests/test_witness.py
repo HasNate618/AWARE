@@ -3,10 +3,14 @@ from aware.app.memory.witness import (
     build_witness_brief,
     build_witness_log,
     is_ai_narrative,
+    is_brief_dump,
     is_hallucinated_narrative,
+    is_low_quality_recap,
     narrative_grounded_in_brief,
+    prose_from_brief_dump,
     summaries_for_witness_display,
     witness_log_to_text,
+    witness_period_significant,
     witness_prose_from_events,
 )
 
@@ -60,6 +64,19 @@ def test_witness_sound_labels_cover_venue_map() -> None:
     assert "doorbell" in WITNESS_SOUND_LABELS
 
 
+def test_is_brief_dump_and_prose_from_brief_dump() -> None:
+    brief = (
+        "Period: 08:09–08:15 (~6 min)\n"
+        "Traffic: busy spell — 8 visitors mostly 08:10:40–08:10:56\n"
+        "Audio: speech at 08:10:25"
+    )
+    assert is_brief_dump(brief)
+    prose = prose_from_brief_dump(brief)
+    assert "8 people" in prose or "8" in prose
+    assert "speech" in prose.lower()
+    assert "booth" not in prose.lower()
+
+
 def test_is_hallucinated_narrative() -> None:
     assert is_hallucinated_narrative('"I\'m a security witness. I see no one here."')
     assert is_hallucinated_narrative("A man with a backpack and laptop walked by.")
@@ -85,7 +102,8 @@ def test_narrative_grounded_in_brief() -> None:
 def test_is_ai_narrative_rejects_digest() -> None:
     assert not is_ai_narrative("04:20–04:31 | entered: person×7, train×79 | accel_x 0.0→0.0")
     assert not is_ai_narrative("12:34:56 person entered frame\n12:35:01 speech heard")
-    assert is_ai_narrative("Two people passed by the booth and speech was heard.")
+    assert not is_ai_narrative("Two people passed by the booth and speech was heard.")
+    assert is_ai_narrative("Two people passed the camera and speech was heard.")
 
 
 def test_is_ai_narrative_rejects_llm_junk() -> None:
@@ -144,6 +162,41 @@ def test_witness_brief_stop_and_talk() -> None:
     assert "lingered" in prose or "moved in close" in prose or "closer" in prose
 
 
+def test_witness_period_significant() -> None:
+    quiet = build_witness_brief(
+        build_witness_log([_event(100.0, "detection_enter", {"label": "person"})]),
+        100.0,
+        200.0,
+    )
+    assert quiet is not None
+    assert not witness_period_significant(quiet)
+
+    busy = build_witness_brief(
+        build_witness_log(
+            [
+                _event(100.0, "detection_enter", {"label": "person"}),
+                _event(110.0, "detection_enter", {"label": "person"}),
+                _event(120.0, "detection_enter", {"label": "person"}),
+                _event(130.0, "sound", {"label": "speech"}),
+            ]
+        ),
+        100.0,
+        200.0,
+    )
+    assert busy is not None
+    assert witness_period_significant(busy)
+
+
+def test_is_low_quality_recap() -> None:
+    assert is_low_quality_recap("One person passed the camera around 08:33:29.")
+    assert is_low_quality_recap("A person was detected on camera.")
+    assert is_low_quality_recap("4 visitors between 08:18:44 and 08:20:03")
+    assert not is_low_quality_recap(
+        "A concentrated burst between 08:10:40 and 08:10:56: "
+        "the on-device camera logged 8 people passing through."
+    )
+
+
 def test_summaries_for_witness_display_filters_noise() -> None:
     rows = [
         {
@@ -159,11 +212,24 @@ def test_summaries_for_witness_display_filters_noise() -> None:
         {
             "period_start": 300.0,
             "period_end": 400.0,
+            "digest": "12:00:01 person entered frame\n12:00:05 speech heard",
             "narrative": "12:00:01 person entered frame\n12:00:05 speech heard",
         },
+        {
+            "period_start": 400.0,
+            "period_end": 500.0,
+            "narrative": (
+                "Period: 08:09–08:15 (~6 min)\n"
+                "Traffic: busy spell — 3 visitors mostly 08:10:40–08:10:56\n"
+                "Audio: speech at 08:10:25"
+            ),
+        },
     ]
-    logs = summaries_for_witness_display(rows)
-    assert len(logs) == 2
-    assert logs[0]["ai"] is True
-    assert logs[1]["ai"] is False
-    assert "passed" in str(logs[1]["text"]).lower() or "visitor" in str(logs[1]["text"]).lower()
+    logs = summaries_for_witness_display(rows, limit=3)
+    assert len(logs) <= 3
+    assert all("booth" not in str(entry["text"]).lower() for entry in logs)
+    assert all(not is_low_quality_recap(str(entry["text"])) for entry in logs)
+    assert any(
+        "people" in str(entry["text"]).lower() or "speech" in str(entry["text"]).lower()
+        for entry in logs
+    )
