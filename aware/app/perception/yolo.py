@@ -221,8 +221,8 @@ class YOLOCamera:
         assert self._cap is not None
         assert self._session is not None
 
-        # Flush stale frames — always process the latest
-        for _ in range(5):
+        # Flush stale frames — drain entire camera buffer
+        for _ in range(30):
             self._cap.read()
 
         ret, frame = self._cap.read()
