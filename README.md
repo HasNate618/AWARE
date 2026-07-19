@@ -10,8 +10,8 @@ AWARE watches a camera feed, listens for sounds, and reads physical sensors. Whe
 
 ```mermaid
 graph LR
-    Camera --> Vision[YOLO]
-    Mic --> Audio[Classifier]
+    Camera --> Vision[YOLO + QNN GPU]
+    Mic --> Audio[YAMNet]
     Sensors --> STM32[STM32]
     Vision --> Rules[Rules Engine]
     Audio --> Rules
@@ -19,7 +19,7 @@ graph LR
     Rules --> Actions[Speak / LED / Telegram]
 ```
 
-The LLM runs on demand for two jobs: parsing "when X do Y" into rules at teach-time, and answering "what happened?" from the on-device event log. The rules engine runs those rules at 500ms intervals, independently of the LLM.
+The LLM runs on demand for three jobs: parsing "when X do Y" into rules at teach-time, narrating activity periods into summaries, and answering "what happened?" from the on-device event log. The rules engine runs those rules at 500ms intervals, independently of the LLM.
 
 ## Memory & Ask
 
@@ -47,7 +47,7 @@ These show how multiple sensor inputs combine with time conditions and actions �
 
 ## Hardware
 
-**MPU:** QRB2210 — 4x Cortex-A53 @ 1.8GHz. Runs Linux, all AI inference, web server, rules engine.
+**MPU:** QRB2210 — 4x Cortex-A53 @ 1.8GHz, Adreno 702 GPU. Runs Linux, all AI inference (YOLO on GPU, LLM/audio on CPU), web server, rules engine.
 
 **MCU:** STM32U585 — Cortex-M33 @ 160MHz. Reads Modulino sensors (temp, distance, accelerometer), controls LEDs and buzzer. Communicates with MPU via msgpack RPC over arduino-router.
 
@@ -55,19 +55,20 @@ These show how multiple sensor inputs combine with time conditions and actions �
 
 ## AI Models
 
-- **YOLOv8n** (ONNX, 13MB) — object detection at 2Hz. CPU inference via ONNX Runtime.
-- **MiniCPM5-1B Q4** (GGUF, 657MB) — parses natural language commands into rules. Grammar-constrained JSON output ensures valid structure every time.
-- **Audio classifier** — YAMNet ONNX (521 sound classes, 16MB) running at ~4Hz. Falls back to lightweight FFT classifier if model unavailable. Mapped 27 relevant classes (doorbell, glass, knock, alarm, siren, dog, speech, baby cry, fire).
+- **YOLOv8n** (ONNX, 13MB) — object detection at 2Hz. Inference runs on the **Adreno 702 GPU** via Qualcomm's QNN Execution Provider; image preprocessing (resize, color conversion) uses OpenCL. Offloads the CPU for other tasks.
+- **MiniCPM5-1B Q4_K_M** (GGUF, 657MB) — parses natural language commands into rules, narrates activity, and answers memory questions. Grammar-constrained JSON output ensures valid structure every time.
+- **YAMNet** (ONNX, 16MB) — sound event classification at ~4Hz mapping to 26 mapped classes (doorbell, glass break, knock, alarm, siren, dog, speech, baby cry, fire). Falls back to FFT classifier if model unavailable. Energy spike pre-filter avoids running inference on silence.
+- **Piper** (ONNX) — neural text-to-speech for spoken responses. espeak-ng fallback if unavailable.
 
 ## Decisions
 
-**YOLOv8n** over larger models: 3.2M params fits in ~100MB RAM alongside the LLM. Bigger models cost 3-4x more memory for marginal accuracy gains indoors.
+**YOLOv8n on QNN GPU** over CPU inference: Adreno 702 handles neural network inference via Qualcomm's AI Engine. OpenCL accelerates image preprocessing. Frees CPU cores for the rules engine, LLM, and audio.
 
-**MiniCPM5-1B** over Phi-3-mini (3.8B): too big for 4GB RAM with everything else running. MiniCPM5 follows structured output instructions reliably.
+**MiniCPM5-1B Q4_K_M** over Q8 or Phi-3-mini (3.8B): Q4 fits in 4GB RAM alongside YOLO, web server, and audio (~657MB for the LLM). Q8 exists on disk but is unused — not enough headroom. MiniCPM5 reliably follows structured output instructions.
 
 **Grammar-constrained LLM output:** GBNF grammar forces valid JSON every time. Without it, ~30% of LLM outputs are malformed.
 
-**Audio classification:** YAMNet ONNX (521 classes) for robust sound detection. FFT fallback if model unavailable. Energy spike pre-filter avoids running inference on silence.
+**Audio classification:** YAMNet ONNX (521 classes) as primary detector for robust sound event classification. FFT is fallback, not primary — better accuracy for doorbell, glass break, speech. Energy spike pre-filter avoids running inference on silence.
 
 **SQLite:** No daemon, no port, single file. ACID with WAL mode handles concurrent reads.
 

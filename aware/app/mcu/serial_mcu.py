@@ -98,19 +98,39 @@ class SerialMCU:
         self._rpc_lock = asyncio.Lock()
         self.using_mock = False
 
-    async def connect(self) -> None:
+    async def connect(self, retries: int = 10, delay: float = 1.0) -> bool:
         import socket as _socket
 
-        try:
-            s = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
-            s.connect(self.socket_path)
-            s.setblocking(False)
-            self._sock = s
-            self._connected = True
-            logger.info("Router MCU on %s", self.socket_path)
-        except Exception:
-            logger.exception("Router connect failed on %s", self.socket_path)
-            self._connected = False
+        for attempt in range(retries):
+            try:
+                if self._sock:
+                    self._sock.close()
+                    self._sock = None
+                s = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+                s.connect(self.socket_path)
+                s.setblocking(False)
+                self._sock = s
+                self._connected = True
+                logger.info("Router MCU on %s", self.socket_path)
+                return True
+            except Exception:
+                self._connected = False
+                if attempt < retries - 1:
+                    logger.debug(
+                        "Router connect attempt %d/%d failed, retrying in %.0fs",
+                        attempt + 1,
+                        retries,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.exception("Router connect failed on %s", self.socket_path)
+        return False
+
+    async def ensure_connected(self) -> bool:
+        if self._connected:
+            return True
+        return await self.connect(retries=3, delay=0.5)
 
     async def disconnect(self) -> None:
         if self._sock:
@@ -173,6 +193,8 @@ class SerialMCU:
                 return None
 
     async def read_all(self) -> list[SensorReading]:
+        if not self._connected:
+            await self.ensure_connected()
         now = time.time()
         readings: list[SensorReading] = []
 

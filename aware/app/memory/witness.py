@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from aware.app.memory.sensors import SENSOR_THRESHOLDS
+from aware.app.util.timefmt import format_clock, format_period, now_in_display_tz
 
 # Labels worth narrating — keep in sync with YAMNet venue map.
 WITNESS_SOUND_LABELS: frozenset[str] = frozenset(
@@ -43,7 +44,7 @@ class WitnessEvent:
 
 
 def _fmt_clock(ts: float) -> str:
-    return datetime.fromtimestamp(ts).strftime("%H:%M:%S")
+    return format_clock(ts)
 
 
 def _humanize(label: str) -> str:
@@ -332,8 +333,9 @@ def _parse_event_timestamp(line: str) -> float | None:
     if not match:
         return None
     hour, minute, second = (int(match.group(i)) for i in range(1, 4))
-    now = datetime.now()
-    return datetime(now.year, now.month, now.day, hour, minute, second).timestamp()
+    now = now_in_display_tz()
+    dt = datetime(now.year, now.month, now.day, hour, minute, second, tzinfo=now.tzinfo)
+    return dt.timestamp()
 
 
 def build_witness_brief(
@@ -703,10 +705,7 @@ def _booth_fallback_prose(narrative: str) -> str:
 
 
 def format_period_label(start: float, end: float) -> str:
-    return (
-        f"{datetime.fromtimestamp(start).strftime('%H:%M')}"
-        f"–{datetime.fromtimestamp(end).strftime('%H:%M')}"
-    )
+    return format_period(start, end)
 
 
 def summaries_for_witness_display(

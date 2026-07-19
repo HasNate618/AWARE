@@ -118,9 +118,13 @@ async def sensor_loop(
     sensor_cache: SensorCache | None = None,
 ) -> None:
     """Read sensors periodically; log to DB on interval or significant change."""
+    from aware.app.mcu.serial_mcu import SerialMCU
+
     last_logged: dict[str, tuple[float, float]] = {}
     try:
         while True:
+            if isinstance(sensors, SerialMCU) and sensors.using_mock:
+                await sensors.ensure_connected()
             readings = await sensors.read_all()
             now = time.time()
             sensor_data: dict[str, float] = {}
@@ -306,10 +310,10 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         settings.mcu_baud_rate,
         socket_path="/var/run/arduino-router.sock",
     )
-    await sensor_bus.connect()
+    connected = await sensor_bus.connect()
     logger.info(
         "MCU bus: %s",
-        "real (arduino-router)" if sensor_bus._connected else "mock fallback",
+        "real (arduino-router)" if connected else "mock fallback (will retry)",
     )
 
     # Subscribe handlers (must be after all state is initialized)

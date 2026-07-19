@@ -1,7 +1,7 @@
 [Unit]
 Description=AWARE - Autonomous Witness And Response Engine
-After=network.target bluetooth.target bluealsa.service llama-server.service aware-bt-connect.service
-Wants=bluetooth.service bluealsa.service llama-server.service aware-bt-connect.service
+After=network.target bluetooth.target bluealsa.service arduino-router.service llama-server.service aware-bt-connect.service
+Wants=bluetooth.service bluealsa.service arduino-router.service llama-server.service aware-bt-connect.service
 
 [Service]
 Type=simple
