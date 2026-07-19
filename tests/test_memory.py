@@ -44,6 +44,13 @@ async def test_query_activity_excludes_sensors(db: EventDB) -> None:
     assert "action_executed" in topics
 
 
+async def test_log_requires_flush_before_new_connection(db: EventDB) -> None:
+    await db.log("test", {"value": 1})
+    await db.flush()
+    rows = await db.query(topic="test", limit=10)
+    assert len(rows) == 1
+
+
 async def test_summaries(db: EventDB) -> None:
     await db.store_summary(
         period_start=100.0,

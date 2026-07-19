@@ -94,9 +94,16 @@ def _row_to_event(row: Sequence[object]) -> dict[str, object]:
 class EventDB:
     """SQLite-backed event log and period summaries."""
 
-    def __init__(self, db_path: str | Path = ":memory:") -> None:
+    def __init__(
+        self,
+        db_path: str | Path = ":memory:",
+        commit_interval: float = 1.0,
+    ) -> None:
         self._db_path = str(db_path)
         self._db: aiosqlite.Connection | None = None
+        self._commit_interval = commit_interval
+        self._last_commit = 0.0
+        self._dirty = False
 
     async def open(self) -> None:
         self._db = await aiosqlite.connect(self._db_path)
@@ -110,14 +117,27 @@ class EventDB:
 
     async def close(self) -> None:
         if self._db:
+            await self.flush()
             await self._db.close()
             self._db = None
+
+    async def flush(self) -> None:
+        if self._db and self._dirty:
+            await self._db.commit()
+            self._dirty = False
+            self._last_commit = time.time()
+
+    async def _maybe_commit(self) -> None:
+        now = time.time()
+        if self._dirty and now - self._last_commit >= self._commit_interval:
+            await self.flush()
 
     async def log(self, topic: str, data: dict[str, object]) -> None:
         if not self._db:
             raise RuntimeError("Database not opened")
         await self._db.execute(_INSERT, (time.time(), topic, json.dumps(data)))
-        await self._db.commit()
+        self._dirty = True
+        await self._maybe_commit()
 
     async def query(self, topic: str | None = None, limit: int = 50) -> list[dict[str, object]]:
         if not self._db:
@@ -218,7 +238,7 @@ class EventDB:
     ) -> int:
         if not self._db:
             raise RuntimeError("Database not opened")
-        cursor = await self._db.execute(
+        cursor =         await self._db.execute(
             """
             INSERT INTO summaries
                 (period_start, period_end, digest, narrative, event_count, created_at)
@@ -226,7 +246,8 @@ class EventDB:
             """,
             (period_start, period_end, digest, narrative, event_count, time.time()),
         )
-        await self._db.commit()
+        self._dirty = True
+        await self.flush()
         return int(cursor.lastrowid or 0)
 
     async def get_summaries(
