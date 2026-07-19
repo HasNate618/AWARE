@@ -135,12 +135,24 @@ def witness_log_to_text(events: list[WitnessEvent], *, max_lines: int = 50) -> s
 
 
 _CLOCK_LINE = re.compile(r"^\d{2}:\d{2}:\d{2} ")
+_EVENT_LINE = re.compile(r"^\d{2}:\d{2}:\d{2} (.+)$")
+
+# MiniCPM often emits meta-commentary instead of a summary.
+_LLM_JUNK_RE = re.compile(
+    r"(?i)"
+    r"(next question|final answer|conclusion:|task\s*\d|create a table|"
+    r"the log (contains|shows|entries)|analysis of|does not (provide|add)|"
+    r"this activity log|purpose of (this|the) (activity )?log|"
+    r"^\s*\|\s*name\s*\|)",
+)
 
 
 def is_ai_narrative(text: str) -> bool:
     """True when text looks like LLM prose, not a raw digest or witness log dump."""
     narrative = text.strip()
-    if len(narrative) < 12:
+    if len(narrative) < 12 or len(narrative) > 280:
+        return False
+    if _LLM_JUNK_RE.search(narrative):
         return False
     if " | " in narrative:
         return False
@@ -151,6 +163,27 @@ def is_ai_narrative(text: str) -> bool:
     lines = [ln for ln in narrative.splitlines() if ln.strip()]
     clock_lines = sum(1 for ln in lines if _CLOCK_LINE.match(ln))
     return clock_lines < 2 and not (len(lines) == 1 and bool(_CLOCK_LINE.match(lines[0])))
+
+
+def witness_events_for_display(
+    events: list[WitnessEvent],
+    *,
+    limit: int = 40,
+) -> list[dict[str, object]]:
+    """Structured witness lines for the dashboard (newest last)."""
+    rows: list[dict[str, object]] = []
+    for event in events[-limit:]:
+        match = _EVENT_LINE.match(event.line)
+        text = match.group(1) if match else event.line
+        rows.append(
+            {
+                "timestamp": event.timestamp,
+                "time": _fmt_clock(event.timestamp),
+                "text": text,
+                "kind": event.kind,
+            }
+        )
+    return rows
 
 
 def format_period_label(start: float, end: float) -> str:

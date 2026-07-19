@@ -26,7 +26,11 @@ from aware.app.memory.db import EventDB
 from aware.app.memory.query import answer_question
 from aware.app.memory.sensors import should_log_sensor
 from aware.app.memory.summarizer import MemorySummarizer
-from aware.app.memory.witness import WITNESS_SOUND_LABELS, summaries_for_witness_display
+from aware.app.memory.witness import (
+    WITNESS_SOUND_LABELS,
+    build_witness_log,
+    witness_events_for_display,
+)
 from aware.app.parser.nl_parser import parse_rule
 from aware.app.perception.interface import PerceptionSnapshot, PerceptionSource, SensorCache
 from aware.app.perception.mock_camera import MockCamera
@@ -470,8 +474,8 @@ async def venue_stats(window: int = 3600) -> dict[str, object]:
     people_passed = detections.get("person", 0)
     sound_total = sum(sounds.values())
 
-    summaries = await db.get_summaries(since=start, until=now)
-    witness_logs = summaries_for_witness_display(summaries)
+    window_events = await db.query_range(start, now)
+    witness_logs = witness_events_for_display(build_witness_log(window_events))
 
     return {
         "timestamp": now,

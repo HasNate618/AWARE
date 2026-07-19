@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from aware.app.llm.interface import LLMClient
 from aware.app.memory.db import EventDB
 from aware.app.memory.digest import build_digest, digest_to_json
-from aware.app.memory.witness import build_witness_log, witness_log_to_text
+from aware.app.memory.witness import build_witness_log, is_ai_narrative, witness_log_to_text
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +84,12 @@ class MemorySummarizer:
             try:
                 async with asyncio.timeout(self._llm_timeout):
                     async with self._llm_lock:
-                        narrative = await self._llm.summarize_period(witness_text)
-                used_llm = True
+                        llm_text = await self._llm.summarize_period(witness_text)
+                if is_ai_narrative(llm_text):
+                    narrative = llm_text
+                    used_llm = True
+                else:
+                    logger.warning("LLM summary rejected — storing witness log lines")
             except Exception:
                 logger.exception("LLM summarization failed — using witness log fallback")
 

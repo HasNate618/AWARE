@@ -184,7 +184,7 @@ function showDash() {
                 '<div class="witness-stat"><div class="lbl">Sounds heard</div><div class="num" id="wSoundTotal">0</div><div class="unit" id="wSoundBreakdown">—</div></div>' +
             '</div>' +
             '<div class="witness-recap-lbl">Witness log</div>' +
-            '<ul class="list witness-log" id="wWitnessLog"><li style="color:var(--muted)">waiting for AI entries…</li></ul>' +
+            '<ul class="list witness-log" id="wWitnessLog"><li style="color:var(--muted)">waiting for activity…</li></ul>' +
         '</div>' +
         '<div class="layout">' +
             '<div class="panel"><div class="panel-title">Camera</div><div class="video"><img id="vid" src="' + API + '/api/video"><span class="video-tag" id="vtag">...</span></div></div>' +
@@ -349,10 +349,10 @@ function init() {
         const logs = d.witness_logs || [];
         wWitnessLog.innerHTML = logs.length
             ? logs.slice().reverse().map(e =>
-                '<li><span class="witness-time">' + esc(e.period_label || '') + '</span>' +
+                '<li><span class="witness-time">' + esc(e.time || e.period_label || '') + '</span>' +
                 '<span class="witness-text">' + esc(String(e.text || '')) + '</span></li>'
             ).join('')
-            : '<li style="color:var(--muted)">no AI witness entries yet — updates every ~5 min when people, sounds, or sensor changes occur</li>';
+            : '<li style="color:var(--muted)">no witness activity in the last hour</li>';
     }
 
     async function pollRules() {

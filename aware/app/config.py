@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     memory_summary_enabled: bool = True
     memory_context_max_chars: int = 6000
     memory_default_window: int = 3600
+    tts_engine: str = "piper"  # espeak | piper
+    piper_model_path: str = "models/en_US-lessac-medium.onnx"
+    piper_sample_rate: int = 22050
+    bt_speaker_volume: str = "40%"
     dashboard_dir: str = "dashboard"
     host: str = "0.0.0.0"
     port: int = 8000

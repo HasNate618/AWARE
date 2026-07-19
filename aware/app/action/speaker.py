@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import os
 import re
 import subprocess
+import sys
+import tempfile
 import time
+from pathlib import Path
+
+from aware.app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -12,51 +19,100 @@ _ACTION_VERB_RE = re.compile(r"^(say|speak|announce|play|alert|notify)\s+", re.I
 _last_spoke: float = 0.0
 
 
+def _synthesize_espeak(text: str, wav_path: Path) -> None:
+    proc = subprocess.run(
+        ["espeak-ng", text, "-w", str(wav_path)],
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    if proc.returncode != 0 or not wav_path.is_file():
+        stderr = proc.stderr.decode(errors="replace").strip()
+        raise RuntimeError(stderr or "espeak-ng failed")
+
+
+def _synthesize_piper(text: str, model_path: Path, wav_path: Path) -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "piper",
+            "--model",
+            str(model_path),
+            "--output_file",
+            str(wav_path),
+        ],
+        input=text,
+        capture_output=True,
+        timeout=30,
+        check=False,
+        text=True,
+    )
+    if proc.returncode != 0 or not wav_path.is_file():
+        stderr = proc.stderr.strip()
+        raise RuntimeError(stderr or f"piper exited {proc.returncode}")
+
+
+def _synthesize_to_file(text: str, wav_path: Path) -> None:
+    settings = get_settings()
+    if settings.tts_engine.lower() == "piper":
+        model = Path(settings.piper_model_path)
+        if not model.is_file():
+            raise FileNotFoundError(f"Piper model not found: {model}")
+        _synthesize_piper(text, model, wav_path)
+        return
+    _synthesize_espeak(text, wav_path)
+
+
 async def speak(text: str) -> None:
-    """Speak text using espeak-ng TTS played through built-in audio."""
+    """Speak text through the Bluetooth speaker (espeak-ng or Piper TTS)."""
     text = text.strip().strip('"').strip("'")
-    # Strip action verb prefix
     text = _ACTION_VERB_RE.sub("", text).strip()
     if not text:
         return
 
-    # Debounce: don't speak more than once per 3 seconds
     global _last_spoke
     now = time.time()
     if now - _last_spoke < 3.0:
         return
     _last_spoke = now
 
+    settings = get_settings()
+    fd, wav_name = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    wav_path = Path(wav_name)
     try:
-        # Generate WAV via espeak-ng
-        wav_bytes = subprocess.run(  # noqa: ASYNC221
-            ["espeak-ng", text, "--stdout"],
-            capture_output=True,
-            timeout=10,
-        ).stdout
+        await asyncio.to_thread(_synthesize_to_file, text, wav_path)
 
-        if not wav_bytes:
-            logger.warning("espeak-ng produced no output for: %s", text)
-            return
-
-        # Set volume and play via bluealsa on BT speaker
         subprocess.run(  # noqa: ASYNC221
-            ["amixer", "-D", "bluealsa", "sset", "TWS Mini Speaker A2DP", "40%"],
-            capture_output=True, timeout=3,
+            [
+                "amixer",
+                "-D",
+                "bluealsa",
+                "sset",
+                "TWS Mini Speaker A2DP",
+                settings.bt_speaker_volume,
+            ],
+            capture_output=True,
+            timeout=3,
         )
         proc = await asyncio.create_subprocess_exec(
-            "aplay", "-D", "bluealsa",
-            "-f", "S16_LE", "-r", "22050", "-c", "1",
-            stdin=subprocess.PIPE,
+            "aplay",
+            "-D",
+            "bluealsa",
+            str(wav_path),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        await proc.communicate(input=wav_bytes)
-        logger.info("Spoke: %s", text)
+        await proc.wait()
+        logger.info("Spoke (%s): %s", settings.tts_engine, text)
 
-    except FileNotFoundError:
-        logger.error("espeak-ng not installed")
+    except FileNotFoundError as exc:
+        logger.error("TTS dependency missing: %s", exc)
     except subprocess.TimeoutExpired:
-        logger.warning("espeak-ng timed out for: %s", text)
+        logger.warning("TTS timed out for: %s", text)
     except Exception:
         logger.exception("Failed to speak: %s", text)
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(wav_name)

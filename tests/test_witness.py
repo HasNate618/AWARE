@@ -62,6 +62,31 @@ def test_is_ai_narrative_rejects_digest() -> None:
     assert is_ai_narrative("Two people passed by the booth and speech was heard.")
 
 
+def test_is_ai_narrative_rejects_llm_junk() -> None:
+    junk = (
+        "The log contains entries of 1-2 short sentences. "
+        "Conclusion: The analysis of the speech samples is complete."
+    )
+    assert not is_ai_narrative(junk)
+    assert not is_ai_narrative("Next Question: What is the purpose of this activity log?")
+    assert not is_ai_narrative("Task 2: Create a table with the following columns: Name, Age")
+
+
+def test_witness_events_for_display() -> None:
+    from aware.app.memory.witness import witness_events_for_display
+
+    events = [
+        _event(100.0, "detection_enter", {"label": "person"}),
+        _event(200.0, "sound", {"label": "speech"}),
+    ]
+    log = build_witness_log(events)
+    rows = witness_events_for_display(log)
+    assert len(rows) == 2
+    assert rows[0]["kind"] == "person"
+    assert rows[0]["text"] == "person entered frame"
+    assert rows[1]["text"] == "speech heard"
+
+
 def test_summaries_for_witness_display_filters_noise() -> None:
     rows = [
         {
