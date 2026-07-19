@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     camera_device: str = ""  # empty = auto-detect UVC camera
     mic_device: str = ""  # empty = auto-detect USB mic (alsa card)
     model_path: str = "models/yolov8n.onnx"
+    yolo_confidence: float = 0.55
+    yolo_inference_interval: float = 0.33
+    video_stream_fps: float = 5.0
     mcu_serial_port: str = "/dev/ttyACM0"
     mcu_baud_rate: int = 115200
     db_path: str = "aware.db"
