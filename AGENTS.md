@@ -202,7 +202,7 @@ tests/
 - Do not add build steps (bundlers, transpilers) to the dashboard. Keep it vanilla HTML/CSS/JS.
 - Scaffold scripts: when adding a new script, make it executable (`chmod +x`).
 
-## Session context (as of 2026-07-18)
+## Session context (as of 2026-07-19)
 This section captures where the project was left off. OpenCode should read this on start.
 
 ### Current state
@@ -212,7 +212,9 @@ This section captures where the project was left off. OpenCode should read this 
 - **Speak action**: Implemented in aware/app/action/speaker.py using espeak-ng + BlueALSA. Wired into action handler in main.py (fires on action type "speak"). 3s debounce, strips action verb prefix, volume 5%.
 - **Built-in audio**: Broken. Qualcomm SoundWire driver has deferred probe loop (`lpass-tx-swr-active-state`). Use BlueALSA for all audio output.
 - **Rule creation**: Real LLM (MiniCPM5 Q4, ~30s per command) or stub LLM parses "when X say Y" correctly. Triggers: detection, sound, time. AND semantics across types.
-- **Dashboard**: Live MJPEG video, detection log with timestamps, rules, activity log, command input, sensor timeseries charts.
+- **Dashboard**: Live MJPEG video, detection log with timestamps, rules, activity log, Teach + **Ask** cards, sensor timeseries charts, live sensor readout.
+- **Memory narration**: `POST /api/ask`, `GET /api/summaries`, 5-min background summarizer. Events: `detection_enter/exit`, `sound`, throttled `sensor:*`. Spec: `docs/superpowers/specs/2026-07-19-memory-narration.md`.
+- **LLM timeout**: `AWARE_LLM_TIMEOUT=180` on board (memory queries need ~90–130s).
 - **Systemd service**: aware.service installed, enabled, auto-restarts. Working directory /home/arduino/aware.
 - **Real LLM**: llama.cpp server running on board at port 8080 with MiniCPM5-1B Q4_K_M (657MB). Wired via AWARE_LLM_SERVER_URL in .env.
 - **STM32 Modulino temperature**: Working. Real STM32U585 firmware (Arduino_Modulino library) reads Modulino Thermo (HS300x) on Wire1. Exposed as `read_temp` RPC through arduino-router.
@@ -253,9 +255,9 @@ This section captures where the project was left off. OpenCode should read this 
 
 ### What to do next
 1. Telegram notification action
-2. LED control via STM32 MCU bus (needs STM32 firmware first)
-3. Test speak action end-to-end via rule trigger (currently working)
-4. Performance optimization (LLM is ~30s per command on Q4, could try Q8 again with free RAM)
+2. LED control via STM32 MCU bus (STM32 firmware in progress)
+3. Trim memory query context (cap notable events; reduce 2000-event scans)
+4. Performance optimization (LLM latency, YOLO GPU EP)
 5. STM32 firmware sketch for Modulino sensor reading + LED control via RPCLite
 
 ### Recent commits

@@ -59,8 +59,8 @@ Needs STM32 firmware exposing `set_led_pwm(r_pin, g_pin, b_pin, r, g, b)` RPC.
 
 | Sensor | Key | Source | Update rate | Range |
 |---|---|---|---|---|
-| Temperature | `temperature_c` | Modulino Thermo (HS300x) | 2Hz | -40..125°C |
-| Distance | `distance_cm` | Modulino Distance (VL53L4CD) | 2Hz | 0..400cm |
+| Temperature | `temperature_c` | Modulino Thermo (HS300x) | 0.5Hz read / 30s log | -40..125°C |
+| Distance | `distance_cm` | Modulino Distance (VL53L4CD) | 0.5Hz read / 30s log | 0..400cm |
 | Accelerometer X | `accel_x` | Modulino Movement (LSM6DSOX) | 2Hz | ±2/4/8/16g |
 | Accelerometer Y | `accel_y` | Modulino Movement (LSM6DSOX) | 2Hz | ±2/4/8/16g |
 | Accelerometer Z | `accel_z` | Modulino Movement (LSM6DSOX) | 2Hz | ±2/4/8/16g |
@@ -92,6 +92,19 @@ All sensors currently use **mock fallback data** (STM32 bootloader firmware does
 | `record` | record | Planned: save MJPEG clip | ❌ |
 | `log` | log | EventDB (always active) | ✅ |
 
+All sensors read via arduino-router every **2s** into `SensorCache` (`GET /api/sensors`). SQLite logs on **30s** interval or when values change beyond threshold.
+
+## Memory narration pipeline
+
+```
+perception_loop → detection_enter / detection_exit / sound → SQLite
+sensor_loop     → sensor:* (throttled)                    → SQLite
+MemorySummarizer (300s) → digest → LLM → summaries table
+POST /api/ask   → context builder → LLM → natural language answer
+```
+
+Event topics: `detection_enter`, `detection_exit`, `sound`, `sensor:*`, `action_executed`, `rule_created`, `summary_created`, `memory_query`.
+
 ## Service → Hardware Distribution
 
 ### Current (all on MPU CPU)
@@ -102,12 +115,13 @@ QRB2210 Cortex-A53
 ├── [core 0-3] Audio energy event detection (5Hz)
 ├── [core 0-3] FastAPI + MJPEG stream (10FPS)
 ├── [core 0-3] Rules engine (500ms tick)
-├── [core 0-3] Sensor loop RPC (2Hz)
-├── [core 0-3] SQLite event log
+├── [core 0-3] Sensor loop RPC (0.5Hz read, 30s log)
+├── [core 0-3] SQLite event log + summaries
+├── [core 0-3] Memory summarizer (300s)
 └── [core 0-3] Sensor → snapshot merge
 
-llama.cpp (separate process, ~9%)
-└── MiniCPM5-1B inference (~30s per command)
+llama.cpp (separate process)
+└── MiniCPM5-1B inference (~30s rule creation, ~90–130s memory query)
 
 STM32U585
 └── Sensor polling (temp, distance, accelerometer) — bootloader only

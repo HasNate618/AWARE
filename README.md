@@ -19,7 +19,21 @@ graph LR
     Rules --> Actions[Speak / LED / Telegram]
 ```
 
-The LLM only runs at rule creation time — it parses "when X do Y" into structured rules. The rules engine then runs those rules at 500ms intervals, independently of the LLM.
+The LLM runs on demand for two jobs: parsing "when X do Y" into rules at teach-time, and answering "what happened?" from the on-device event log. The rules engine runs those rules at 500ms intervals, independently of the LLM.
+
+## Memory & Ask
+
+Every perception event is logged to SQLite (`detection_enter`, `detection_exit`, `sound`, throttled `sensor:*`, `action_executed`). A background task every 5 minutes compresses recent events into a digest and stores a narrative summary. Users ask natural-language questions via the dashboard **Ask** card or `POST /api/ask`.
+
+```
+Events → SQLite → 5-min digest → LLM narrative → summaries table
+                                      ↓
+User asks "what happened?" → context builder → LLM answer
+```
+
+**API endpoints:** `POST /api/ask`, `GET /api/summaries`, `GET /api/sensors` (live cache), `GET /events`
+
+Board inference for memory queries takes ~90–130s; set `AWARE_LLM_TIMEOUT=180`. See `docs/superpowers/specs/2026-07-19-memory-narration.md`.
 
 ## Use Cases
 
@@ -59,4 +73,6 @@ These show how multiple sensor inputs combine with time conditions and actions �
 
 **Arduino-router msgpack RPC:** The official Qualcomm bridge for MPU↔STM32 on this board. We use the platform's native inter-processor communication.
 
-**500ms tick:** Fast enough to feel instant, slow enough to not waste CPU. Aligned with 2Hz sensor updates.
+**500ms tick:** Fast enough to feel instant, slow enough to not waste CPU. Sensor cache updates every 2s; DB logs on 30s interval or significant change.
+
+**Memory narration:** Hierarchical compression (raw events → 5-min digest → LLM narrative) keeps memory queries within 2048-token context on MiniCPM5-1B. Digest is stored as fallback when LLM is busy or unavailable.
