@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     rules_tick_ms: int = 500
     sensor_read_interval: float = 2.0
     sensor_log_interval: float = 30.0
+    sensor_chart_log_interval: float = 10.0
     memory_summary_interval: int = 300
     memory_summary_enabled: bool = True
     memory_context_max_chars: int = 6000

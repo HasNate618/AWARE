@@ -216,8 +216,8 @@
         const tempPeriodEl = document.getElementById('tempPeriod');
         const distPeriodEl = document.getElementById('distPeriod');
         const movePeriodEl = document.getElementById('movePeriod');
-        let tempWindow = 30, distWindow = 30, moveWindow = 30;
-        let tempBucket = 5, distBucket = 5, moveBucket = 5;
+        let tempWindow = 300, distWindow = 300, moveWindow = 300;
+        let tempBucket = 30, distBucket = 30, moveBucket = 30;
 
         function renderPeriodButtons(container, state) {
             if (!container) return;
@@ -453,7 +453,7 @@
                     responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
                     scales: {
                         x: { ticks: { color: '#444', maxTicksLimit: 6, font: { size: 8 } }, grid: { color: '#181818' } },
-                        y: { ticks: { color: '#444', font: { size: 8 } }, grid: { color: '#181818' } },
+                        y: { ticks: { color: '#444', font: { size: 8 } }, grid: { color: '#181818' }, grace: '10%' },
                     },
                     plugins: { legend: { display: false } },
                 },
@@ -468,8 +468,18 @@
             if (!ch) return;
             const d = await get('/api/timeseries?topic=' + topic + '&window=' + window + '&bucket=' + bucket);
             if (!d || !d.length) return;
+            const vals = d.map(x => x.avg);
             ch.data.labels = d.map(x => new Date(x.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-            ch.data.datasets[0].data = d.map(x => x.avg);
+            ch.data.datasets[0].data = vals;
+            const min = Math.min(...vals);
+            const max = Math.max(...vals);
+            if (min === max) {
+                ch.options.scales.y.min = min - 1;
+                ch.options.scales.y.max = max + 1;
+            } else {
+                delete ch.options.scales.y.min;
+                delete ch.options.scales.y.max;
+            }
             ch.update();
         }
 
