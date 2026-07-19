@@ -473,15 +473,26 @@
             ch.update();
         }
 
+        function activityMessage(topic, dd) {
+            if (dd.message) return dd.message;
+            if (topic === 'detection_enter') return (dd.label || 'object') + ' entered (' + pc(dd.confidence || 0) + '%)';
+            if (topic === 'detection_exit') return (dd.label || 'object') + ' left';
+            if (topic === 'sound') return (dd.label || 'sound') + ' (' + pc(dd.confidence || 0) + '%)';
+            if (topic === 'rule_created') return 'rule "' + (dd.name || '') + '"';
+            if (topic === 'summary_created') return (dd.narrative || 'period summary').substring(0, 120);
+            if (topic === 'memory_query') return 'Q: ' + (dd.question || '').substring(0, 60);
+            return dd.name || JSON.stringify(dd).substring(0, 100);
+        }
+
         async function updateActivity() {
-            const d = await get('/events?limit=30');
+            const d = await get('/api/activity?limit=30');
             const list = document.getElementById('activityList');
             if (!list) return;
             if (!d || !d.length) { list.innerHTML = '<li class="empty">no activity yet</li>'; return; }
             list.innerHTML = d.reverse().map(e => {
                 const dd = e.data || {};
                 const cls = e.topic === 'action_executed' ? 'action' : 'rule';
-                const msg = dd.message || dd.name || JSON.stringify(dd).substring(0, 100);
+                const msg = activityMessage(e.topic, dd);
                 return '<li class="activity-item"><span class="activity-time">' + ts(e.timestamp) +
                     '</span><span class="activity-tag ' + cls + '">' + e.topic.replace('_', ' ') +
                     '</span><span class="activity-msg">' + msg + '</span></li>';

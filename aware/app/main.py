@@ -429,6 +429,13 @@ async def events(topic: str | None = None, limit: int = 50) -> list[dict[str, ob
     return await db.query(topic=topic, limit=limit)
 
 
+@app.get("/api/activity")
+async def activity(limit: int = 30) -> list[dict[str, object]]:
+    """Recent narratable events for the dashboard activity feed."""
+    db: EventDB = app.state.db
+    return await db.query_activity(limit=limit)
+
+
 @app.get("/rules")
 async def list_rules() -> list[dict[str, object]]:
     store: RulesStore = app.state.store

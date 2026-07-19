@@ -42,6 +42,16 @@ _SELECT = "SELECT id, timestamp, topic, data FROM events"
 _SELECT_TOPIC = f"{_SELECT} WHERE topic = ? ORDER BY id DESC LIMIT ?;"
 _SELECT_ALL = f"{_SELECT} ORDER BY id DESC LIMIT ?;"
 
+ACTIVITY_TOPICS: tuple[str, ...] = (
+    "detection_enter",
+    "detection_exit",
+    "sound",
+    "action_executed",
+    "rule_created",
+    "summary_created",
+    "memory_query",
+)
+
 _TIMESERIES = """
 SELECT
     CAST((timestamp - :start) / :bucket_size AS INTEGER) AS bucket,
@@ -116,6 +126,16 @@ class EventDB:
             cursor = await self._db.execute(_SELECT_TOPIC, (topic, limit))
         else:
             cursor = await self._db.execute(_SELECT_ALL, (limit,))
+        rows = await cursor.fetchall()
+        return [_row_to_event(row) for row in rows]
+
+    async def query_activity(self, limit: int = 30) -> list[dict[str, object]]:
+        """Return recent narratable events, excluding raw sensor telemetry."""
+        if not self._db:
+            raise RuntimeError("Database not opened")
+        placeholders = ",".join("?" for _ in ACTIVITY_TOPICS)
+        sql = f"{_SELECT} WHERE topic IN ({placeholders}) ORDER BY id DESC LIMIT ?;"
+        cursor = await self._db.execute(sql, (*ACTIVITY_TOPICS, limit))
         rows = await cursor.fetchall()
         return [_row_to_event(row) for row in rows]
 

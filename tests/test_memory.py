@@ -31,6 +31,19 @@ async def test_query_range(db: EventDB) -> None:
     assert len(rows) == 2
 
 
+async def test_query_activity_excludes_sensors(db: EventDB) -> None:
+    await db.log("sensor:temperature_c", {"label": "temperature_c", "value": 21.0})
+    await db.log("sensor:distance_cm", {"label": "distance_cm", "value": 100.0})
+    await db.log("detection_enter", {"label": "person", "confidence": 0.9})
+    await db.log("action_executed", {"message": "Rule fired"})
+    rows = await db.query_activity(limit=10)
+    topics = {r["topic"] for r in rows}
+    assert "sensor:temperature_c" not in topics
+    assert "sensor:distance_cm" not in topics
+    assert "detection_enter" in topics
+    assert "action_executed" in topics
+
+
 async def test_summaries(db: EventDB) -> None:
     await db.store_summary(
         period_start=100.0,
