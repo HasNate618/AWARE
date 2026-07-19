@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     llm_ctx_size: int = 2048
     llm_timeout: float = 180.0
     rules_tick_ms: int = 500
-    sensor_read_interval: float = 2.0
+    sensor_read_interval: float = 1.0
     sensor_log_interval: float = 30.0
     memory_summary_interval: int = 300
     memory_summary_enabled: bool = True

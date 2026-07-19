@@ -96,6 +96,7 @@ class SerialMCU:
         self._connected = False
         self._mock = _MockProvider()
         self._rpc_lock = asyncio.Lock()
+        self.using_mock = False
 
     async def connect(self) -> None:
         import socket as _socket
@@ -179,7 +180,9 @@ class SerialMCU:
                 readings.append(SensorReading(sensor=axis, value=float(val), timestamp=now))
 
         if readings:
+            self.using_mock = False
             return _normalize_readings(readings)
+        self.using_mock = True
         if self._connected:
             logger.warning("MCU connected but all sensor RPCs failed — using mock fallback")
         return _normalize_readings(self._mock.read_all())

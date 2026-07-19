@@ -291,6 +291,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 
     sensor_cache = SensorCache()
     app.state.sensor_cache = sensor_cache
+    app.state.sensor_bus = sensor_bus
 
     summarizer_task: asyncio.Task[None] | None = None
     if settings.memory_summary_enabled:
@@ -346,9 +347,14 @@ async def health() -> dict[str, str]:
 async def get_sensors() -> dict[str, object]:
     """Return live sensor readings from the in-memory cache."""
     cache: SensorCache = app.state.sensor_cache
+    settings: Settings = app.state.settings
+    bus = app.state.sensor_bus
+    source = "mock" if getattr(bus, "using_mock", False) else "live"
     return {
         "timestamp": time.time(),
         "readings": dict(cache.readings),
+        "source": source,
+        "interval_s": settings.sensor_read_interval,
     }
 
 

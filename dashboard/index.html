@@ -4,155 +4,373 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <title>A.W.A.R.E. Command Center</title>
+    <title>A.W.A.R.E.</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         :root {
-            --bg: #07080f; --panel: rgba(18,20,35,.85); --border: rgba(120,130,255,.18);
-            --text: #e8eaf6; --muted: #7a7f9a; --cyan: #22d3ee; --indigo: #818cf8;
-            --green: #34d399; --amber: #fbbf24; --red: #f87171;
-            --mono: 'JetBrains Mono', ui-monospace, monospace;
-            --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            --bg: #0a0a0a;
+            --panel: rgba(255, 255, 255, 0.055);
+            --panel-solid: rgba(24, 24, 24, 0.75);
+            --border: rgba(255, 255, 255, 0.09);
+            --text: #e8e8e8;
+            --muted: #777;
+            --accent: #00ff88;
+            --accent-dim: rgba(0, 255, 136, 0.12);
+            --amber: #ffaa00;
+            --red: #ff5555;
+            --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
         }
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { min-height:100vh; font-family:var(--sans); color:var(--text); background:
-            radial-gradient(ellipse 80% 50% at 15% -10%, rgba(99,102,241,.2), transparent),
-            radial-gradient(ellipse 50% 40% at 95% 5%, rgba(34,211,238,.12), transparent), var(--bg); }
-        .shell { max-width:1500px; margin:0 auto; padding:12px 14px 28px; }
-        .topbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 16px; margin-bottom:12px;
-            background:var(--panel); border:1px solid var(--border); border-radius:14px; backdrop-filter:blur(14px); }
-        .brand { font-family:var(--mono); font-weight:800; font-size:17px; letter-spacing:2px; color:var(--cyan); }
-        .brand em { color:var(--indigo); font-style:normal; }
-        .pill { font:10px var(--mono); padding:4px 10px; border-radius:999px; border:1px solid var(--border); color:var(--muted); }
-        .pill.ok { color:var(--green); border-color:rgba(52,211,153,.35); }
-        .pill.warn { color:var(--amber); border-color:rgba(251,191,36,.35); }
-        .pill.bad { color:var(--red); border-color:rgba(248,113,113,.35); }
-        .topbar-right { margin-left:auto; }
-        .logout { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:8px; padding:6px 10px; cursor:pointer; font-size:11px; }
-        .hero { display:grid; grid-template-columns:1.45fr 1fr; gap:12px; margin-bottom:12px; }
-        @media(max-width:960px){ .hero { grid-template-columns:1fr; } }
-        .panel { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px; min-width:0; }
-        .panel-title { font-size:10px; text-transform:uppercase; letter-spacing:2px; color:var(--muted); margin-bottom:10px; font-weight:600; }
-        .video { position:relative; border-radius:10px; overflow:hidden; background:#000; aspect-ratio:4/3; }
-        .video img { width:100%; height:100%; object-fit:cover; display:block; }
-        .video-tag { position:absolute; top:8px; left:8px; font:10px var(--mono); padding:3px 8px; border-radius:6px; background:rgba(0,0,0,.65); color:var(--green); }
-        .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
-        .stat { text-align:center; padding:10px 6px; border-radius:10px; background:rgba(0,0,0,.35); border:1px solid var(--border); }
-        .stat .lbl { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
-        .stat .num { font:700 22px var(--mono); margin:4px 0; }
-        .stat .unit { font-size:9px; color:var(--muted); }
-        .wins { display:flex; gap:6px; margin-bottom:10px; }
-        .wins button { background:rgba(0,0,0,.35); border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:4px 10px; font:10px var(--mono); cursor:pointer; }
-        .wins button.on { border-color:var(--cyan); color:var(--cyan); background:rgba(34,211,238,.1); }
-        .chart-lbl { font:9px var(--mono); color:var(--muted); margin-bottom:2px; }
-        .chart-box { height:58px; margin-bottom:8px; position:relative; }
-        .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
-        @media(max-width:800px){ .row2 { grid-template-columns:1fr; } }
-        .interact { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
-        @media(max-width:700px){ .interact { grid-template-columns:1fr; } }
-        .box { padding:14px; border-radius:12px; border:1px solid var(--border); background:rgba(0,0,0,.28); }
-        .box h3 { font-size:13px; margin-bottom:4px; }
-        .box p { font-size:11px; color:var(--muted); margin-bottom:10px; }
-        .box.teach h3 { color:var(--green); } .box.ask h3 { color:var(--cyan); }
-        .row { display:flex; gap:8px; }
-        .row input { flex:1; min-width:0; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:rgba(0,0,0,.4); color:var(--text); font-size:13px; }
-        .row input:focus { outline:none; border-color:var(--indigo); }
-        .btn { border:none; border-radius:8px; padding:10px 16px; font-weight:600; font-size:12px; cursor:pointer; white-space:nowrap; }
-        .btn:disabled { opacity:.5; cursor:wait; }
-        .btn-teach { background:var(--green); color:#042f1a; }
-        .btn-ask { background:linear-gradient(135deg,var(--cyan),var(--indigo)); color:#0a0a12; }
-        .fb { margin-top:10px; font-size:12px; min-height:18px; }
-        .ask-go { display:flex; gap:8px; align-items:center; color:var(--cyan); font:11px var(--mono); }
-        .spin { width:14px; height:14px; border:2px solid rgba(34,211,238,.25); border-top-color:var(--cyan); border-radius:50%; animation:sp .7s linear infinite; }
-        @keyframes sp { to { transform:rotate(360deg); } }
-        .ask-out { background:rgba(34,211,238,.07); border:1px solid rgba(34,211,238,.22); border-radius:8px; padding:12px; line-height:1.55; color:#cceeff; }
-        .ask-meta { font:10px var(--mono); color:var(--muted); margin-top:6px; }
-        .feed,.log,.rules { list-style:none; max-height:190px; overflow-y:auto; font-size:11px; }
-        .feed li,.log li,.rules li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.04); display:flex; gap:8px; align-items:baseline; }
-        .t { color:var(--muted); font:10px var(--mono); width:56px; flex-shrink:0; }
-        .tag { font-size:9px; padding:2px 6px; border-radius:4px; background:rgba(129,140,248,.14); color:var(--indigo); flex-shrink:0; }
-        .tag.act { background:rgba(251,191,36,.12); color:var(--amber); }
-        .lbl { font-weight:600; width:64px; flex-shrink:0; }
-        .lbl.obj { color:var(--green); } .lbl.snd { color:var(--amber); }
-        .rules .name { color:var(--green); font-weight:600; }
-        .rules .del { margin-left:auto; background:none; border:1px solid rgba(248,113,113,.3); color:var(--red); border-radius:4px; padding:2px 8px; cursor:pointer; font-size:10px; }
-        .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
-        .login-box { width:100%; max-width:360px; padding:32px; background:var(--panel); border:1px solid var(--border); border-radius:16px; }
-        .login-box h1 { font-family:var(--mono); color:var(--cyan); text-align:center; margin-bottom:20px; letter-spacing:3px; }
-        .login-box input { width:100%; padding:12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border); background:rgba(0,0,0,.4); color:var(--text); }
-        .login-box button { width:100%; padding:12px; border:none; border-radius:8px; background:var(--cyan); color:#041016; font-weight:700; cursor:pointer; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh; font-family: var(--mono); color: var(--text); background: var(--bg);
+            background-image: radial-gradient(ellipse 70% 40% at 50% -5%, rgba(0, 255, 136, 0.06), transparent);
+        }
+        .shell { max-width: 1480px; margin: 0 auto; padding: 10px 12px 24px; }
+
+        .topbar {
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+            padding: 10px 14px; margin-bottom: 10px;
+            background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+            backdrop-filter: blur(12px);
+        }
+        .brand { font-weight: 700; font-size: 14px; letter-spacing: 2px; color: var(--accent); }
+        .pill { font-size: 10px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+        .pill.ok { color: var(--accent); border-color: rgba(0, 255, 136, 0.35); }
+        .pill.warn { color: var(--amber); border-color: rgba(255, 170, 0, 0.35); }
+        .pill.bad { color: var(--red); border-color: rgba(255, 85, 85, 0.35); }
+        .topbar-right { margin-left: auto; }
+        .logout { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 10px; font-family: inherit; }
+
+        .layout { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 10px; margin-bottom: 10px; }
+        @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+
+        .panel {
+            background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+            padding: 12px; min-width: 0; backdrop-filter: blur(10px);
+        }
+        .panel-title {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+            color: var(--muted); margin-bottom: 8px;
+        }
+
+        .video { position: relative; border-radius: 8px; overflow: hidden; background: #000; aspect-ratio: 16/10; }
+        .video img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .video-tag { position: absolute; top: 6px; left: 6px; font-size: 10px; padding: 2px 7px; border-radius: 4px; background: rgba(0,0,0,0.7); color: var(--accent); }
+
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+        .stat { text-align: center; padding: 8px 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); }
+        .stat .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; }
+        .stat .num { font-size: 20px; font-weight: 700; color: var(--accent); margin: 3px 0; }
+        .stat .unit { font-size: 9px; color: var(--muted); }
+        .src-line { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+        .src-line.live { color: var(--accent); }
+
+        .wins { display: flex; gap: 4px; margin-bottom: 8px; }
+        .wins button { background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 3px 8px; font-size: 10px; cursor: pointer; font-family: inherit; }
+        .wins button.on { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+        .chart-block { margin-bottom: 10px; }
+        .chart-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+        .chart-name { font-size: 9px; color: var(--muted); text-transform: uppercase; }
+        .chart-val { font-size: 10px; color: var(--accent); }
+        .chart-box { height: 76px; padding: 4px 6px 2px 2px; position: relative; }
+
+        .interact { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        @media (max-width: 700px) { .interact { grid-template-columns: 1fr; } }
+        .row { display: flex; gap: 6px; }
+        .row input { flex: 1; min-width: 0; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--border); background: rgba(0,0,0,0.35); color: var(--text); font-size: 12px; font-family: inherit; }
+        .row input:focus { outline: none; border-color: var(--accent); }
+        .btn { border: none; border-radius: 6px; padding: 9px 14px; font-weight: 600; font-size: 11px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+        .btn:disabled { opacity: 0.5; cursor: wait; }
+        .btn-go { background: var(--accent); color: #000; }
+        .btn-ask { background: rgba(0, 255, 136, 0.2); color: var(--accent); border: 1px solid rgba(0, 255, 136, 0.35); }
+        .fb { margin-top: 6px; font-size: 11px; min-height: 16px; color: var(--muted); }
+        .ask-go { display: flex; gap: 8px; align-items: center; color: var(--accent); }
+        .spin { width: 12px; height: 12px; border: 2px solid rgba(0,255,136,0.2); border-top-color: var(--accent); border-radius: 50%; animation: sp .7s linear infinite; }
+        @keyframes sp { to { transform: rotate(360deg); } }
+        .ask-out { background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 6px; padding: 10px; line-height: 1.5; color: #ccc; }
+
+        .tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+        .tab { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 4px; padding: 3px 9px; color: var(--muted); font-size: 10px; cursor: pointer; font-family: inherit; }
+        .tab.on { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+        .list { list-style: none; max-height: 170px; overflow-y: auto; font-size: 11px; }
+        .list li { padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; gap: 6px; align-items: baseline; }
+        .t { color: var(--muted); font-size: 10px; width: 54px; flex-shrink: 0; }
+        .tag { font-size: 9px; padding: 1px 5px; border-radius: 3px; background: var(--accent-dim); color: var(--accent); flex-shrink: 0; }
+        .tag.act { background: rgba(255,170,0,0.12); color: var(--amber); }
+
+        .wf-list { list-style: none; max-height: 280px; overflow-y: auto; }
+        .wf-item { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; gap: 8px; align-items: flex-start; }
+        .wf-body { flex: 1; min-width: 0; }
+        .wf-name { color: var(--accent); font-weight: 600; font-size: 12px; }
+        .wf-desc { color: var(--muted); font-size: 11px; margin-top: 3px; }
+        .wf-badge { display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 3px; margin: 1px 3px 1px 0; background: var(--accent-dim); color: var(--accent); }
+        .wf-badge.sound { background: rgba(255,170,0,0.12); color: var(--amber); }
+        .wf-badge.sensor { background: rgba(255,100,130,0.12); color: #ff6688; }
+        .wf-del { background: none; border: 1px solid rgba(255,85,85,0.3); color: var(--red); border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 10px; font-family: inherit; flex-shrink: 0; }
+        .trace { font-size: 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 4px; padding: 8px; margin-top: 6px; display: none; overflow-x: auto; }
+        .trace.show { display: block; }
+        .trace-step { color: var(--muted); font-size: 9px; text-transform: uppercase; margin: 4px 0 2px; }
+        .trace-json { color: #8ecfff; word-break: break-word; }
+        .trace-parsed { color: var(--accent); word-break: break-word; }
+
+        .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .login-box { width: 100%; max-width: 340px; padding: 28px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+        .login-box h1 { color: var(--accent); text-align: center; margin-bottom: 16px; letter-spacing: 3px; }
+        .login-box input { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; border: 1px solid var(--border); background: rgba(0,0,0,0.35); color: var(--text); font-family: inherit; }
+        .login-box button { width: 100%; padding: 10px; border: none; border-radius: 6px; background: var(--accent); color: #000; font-weight: 700; cursor: pointer; font-family: inherit; }
     </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
 const API = location.origin;
-const showLogin = () => {
-    app.innerHTML = '<div class="login-wrap"><div class="login-box"><h1>A.W.A.R.E.</h1><input id="pw" type="password" placeholder="password" autofocus><button id="go">Enter</button></div></div>';
-    go.onclick = () => { localStorage.setItem('aware_logged_in','1'); showDash(); };
-    pw.onkeydown = e => { if (e.key==='Enter') go.click(); };
-};
-const showDash = () => {
-    app.innerHTML = '<div class="shell"><header class="topbar"><div class="brand">A.<em>W.A.R.E.</em></div><span class="pill" id="pConn">offline</span><span class="pill" id="pCam">cam</span><span class="pill" id="pMcu">mcu</span><span class="pill" id="pLlm">llm</span><div class="topbar-right"><button class="logout" id="out">logout</button></div></header>' +
-    '<section class="hero"><div class="panel"><div class="panel-title">Live vision</div><div class="video"><img id="vid" src="'+API+'/api/video"><span class="video-tag" id="vtag">...</span></div></div>' +
-    '<div class="panel"><div class="panel-title">Environment</div><div class="stats"><div class="stat"><div class="lbl">Temp</div><div class="num" id="tLive" style="color:#f87171">--</div><div class="unit">°C</div></div><div class="stat"><div class="lbl">Distance</div><div class="num" id="dLive" style="color:#60a5fa">--</div><div class="unit">cm</div></div><div class="stat"><div class="lbl">Motion</div><div class="num" id="mLive" style="color:#fbbf24">--</div><div class="unit">g dev</div></div></div>' +
-    '<div class="wins" id="wins"></div><div class="chart-lbl">temperature</div><div class="chart-box"><canvas id="cT"></canvas></div><div class="chart-lbl">distance</div><div class="chart-box"><canvas id="cD"></canvas></div><div class="chart-lbl">movement</div><div class="chart-box"><canvas id="cM"></canvas></div></div></section>' +
-    '<section class="interact"><div class="panel box teach"><h3>Teach</h3><p>Create automations in plain English.</p><div class="row"><input id="cmdIn" placeholder="when person detected say hello"><button class="btn btn-teach" id="cmdBtn">Teach</button></div><div class="fb" id="cmdFb"></div></div>' +
-    '<div class="panel box ask"><h3>Ask</h3><p>Query on-device memory — can take 1–2 min.</p><div class="row"><input id="askIn" placeholder="what happened in the last hour?"><button class="btn btn-ask" id="askBtn">Ask</button></div><div class="fb" id="askFb"></div></div></section>' +
-    '<section class="row2"><div class="panel"><div class="panel-title">Activity</div><ul class="feed" id="act"></ul></div><div class="panel"><div class="panel-title">Perception</div><ul class="log" id="obj"></ul><ul class="log" id="snd" style="margin-top:8px"></ul></div></section>' +
-    '<section class="panel"><div class="panel-title">Automations</div><ul class="rules" id="rules"></ul></section></div>';
+const POLL_MS = 1000;
+
+function showLogin() {
+    app.innerHTML = '<div class="login-wrap"><div class="login-box"><h1>A.W.A.R.E.</h1><input id="pw" type="password" placeholder="password" autofocus><button id="go">Login</button></div></div>';
+    go.onclick = () => { localStorage.setItem('aware_logged_in', '1'); showDash(); };
+    pw.onkeydown = e => { if (e.key === 'Enter') go.click(); };
+}
+
+function showDash() {
+    app.innerHTML =
+        '<div class="shell">' +
+        '<header class="topbar"><div class="brand">A.W.A.R.E.</div><span class="pill" id="pConn">offline</span><span class="pill" id="pCam">camera</span><span class="pill" id="pMcu">sensors</span><span class="pill" id="pLlm">llm</span><div class="topbar-right"><button class="logout" id="out">logout</button></div></header>' +
+        '<div class="layout">' +
+            '<div class="panel"><div class="panel-title">Camera</div><div class="video"><img id="vid" src="' + API + '/api/video"><span class="video-tag" id="vtag">...</span></div></div>' +
+            '<div class="panel"><div class="panel-title">Sensors</div>' +
+                '<div class="src-line" id="srcLine">source: ...</div>' +
+                '<div class="stats">' +
+                    '<div class="stat"><div class="lbl">Temp</div><div class="num" id="tLive">--</div><div class="unit">°C</div></div>' +
+                    '<div class="stat"><div class="lbl">Distance</div><div class="num" id="dLive">--</div><div class="unit">cm</div></div>' +
+                    '<div class="stat"><div class="lbl">Motion</div><div class="num" id="mLive">--</div><div class="unit">g dev</div></div>' +
+                '</div>' +
+                '<div class="wins" id="wins"></div>' +
+                '<div class="chart-block"><div class="chart-head"><span class="chart-name">temperature</span><span class="chart-val" id="tVal"></span></div><div class="chart-box"><canvas id="cT"></canvas></div></div>' +
+                '<div class="chart-block"><div class="chart-head"><span class="chart-name">distance</span><span class="chart-val" id="dVal"></span></div><div class="chart-box"><canvas id="cD"></canvas></div></div>' +
+                '<div class="chart-block"><div class="chart-head"><span class="chart-name">movement</span><span class="chart-val" id="mVal"></span></div><div class="chart-box"><canvas id="cM"></canvas></div></div>' +
+            '</div>' +
+        '</div>' +
+        '<div class="interact">' +
+            '<div class="panel"><div class="panel-title">Teach</div><div class="row"><input id="cmdIn" placeholder="when person detected say hello"><button class="btn btn-go" id="cmdBtn">Teach</button></div><div class="fb" id="cmdFb"></div></div>' +
+            '<div class="panel"><div class="panel-title">Ask</div><div class="row"><input id="askIn" placeholder="what happened in the last hour?"><button class="btn btn-ask" id="askBtn">Ask</button></div><div class="fb" id="askFb"></div></div>' +
+        '</div>' +
+        '<div class="panel" style="margin-bottom:10px"><div class="panel-title">Automations</div><ul class="wf-list" id="wfList"><li style="color:var(--muted)">none yet</li></ul></div>' +
+        '<div class="layout">' +
+            '<div class="panel"><div class="panel-title">Activity</div><ul class="list" id="act"></ul></div>' +
+            '<div class="panel"><div class="panel-title">Perception</div><div class="tabs"><button class="tab on" data-tab="obj">Objects</button><button class="tab" data-tab="snd">Sounds</button></div><ul class="list" id="obj"></ul><ul class="list" id="snd" style="display:none"></ul></div>' +
+        '</div></div>';
     init();
-};
+}
+
 const app = document.getElementById('app');
 if (localStorage.getItem('aware_logged_in')) showDash(); else showLogin();
 
 function init() {
     out.onclick = () => { localStorage.removeItem('aware_logged_in'); showLogin(); };
-    const get = async p => { try { const r = await fetch(API+p); return r.ok ? r.json() : null; } catch { return null; } };
-    const ts = t => t ? new Date(t*1000).toLocaleTimeString() : '--';
-    const esc = s => { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; };
-    const pc = c => Math.round(c*100);
-    const WINS = [{l:'30s',s:30},{l:'2m',s:120},{l:'5m',s:300}];
+    const get = async p => { try { const r = await fetch(API + p); return r.ok ? r.json() : null; } catch { return null; } };
+    const ts = t => t ? new Date(t * 1000).toLocaleTimeString() : '--';
+    const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+    const pc = c => Math.round(c * 100);
+
+    const WINS = [{ l: '30s', s: 30 }, { l: '2m', s: 120 }, { l: '5m', s: 300 }];
     let winSec = 30;
-    const bufs = { temperature_c:[], distance_cm:[], movement_intensity:[] };
-    wins.innerHTML = WINS.map(w=>'<button data-s="'+w.s+'"'+(w.s===30?' class="on"':'')+'>'+w.l+'</button>').join('');
-    wins.onclick = e => { const b=e.target.closest('button'); if(!b)return; wins.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); winSec=+b.dataset.s; trim(); paint(); };
-    const trim = () => { const cut=Date.now()/1000-winSec; for(const k of Object.keys(bufs)) while(bufs[k].length&&bufs[k][0].t<cut) bufs[k].shift(); };
-    const mk = (id,col) => new Chart(document.getElementById(id).getContext('2d'), { type:'line', data:{labels:[],datasets:[{data:[],borderColor:col,backgroundColor:col+'22',fill:true,tension:.4,pointRadius:0,borderWidth:2}]},
-        options:{responsive:true,maintainAspectRatio:false,animation:{duration:350,easing:'easeOutQuart'},transitions:{active:{animation:{duration:350}}},scales:{x:{display:false},y:{display:false}},plugins:{legend:{display:false}}}});
-    const ch = { temperature_c:mk('cT','#f87171'), distance_cm:mk('cD','#60a5fa'), movement_intensity:mk('cM','#fbbf24') };
-    const paint = () => { for(const [k,c] of Object.entries(ch)) { const p=bufs[k]||[]; c.data.labels=p.map(x=>new Date(x.t*1000).toLocaleTimeString([],{second:'2-digit'})); c.data.datasets[0].data=p.map(x=>x.v); c.update('active'); } };
-    const pollSens = async () => {
-        const d = await get('/api/sensors'); if(!d?.readings) return;
-        const r=d.readings, now=d.timestamp||Date.now()/1000;
-        if(r.temperature_c!=null) tLive.textContent=r.temperature_c.toFixed(1);
-        if(r.distance_cm!=null) dLive.textContent=Math.round(r.distance_cm);
-        if(r.movement_intensity!=null) mLive.textContent=r.movement_intensity.toFixed(3);
-        pMcu.className='pill '+(r.accel_x!=null?'ok':'warn'); pMcu.textContent=r.accel_x!=null?'mcu live':'mcu mock';
-        for(const k of Object.keys(bufs)) { if(r[k]==null) continue; const b=bufs[k]; if(b.length&&Math.abs(b[b.length-1].t-now)<.5) continue; b.push({t:now,v:r[k]}); }
-        trim(); paint();
+    const bufs = { temperature_c: [], distance_cm: [], movement_intensity: [] };
+
+    wins.innerHTML = WINS.map(w => '<button data-s="' + w.s + '"' + (w.s === 30 ? ' class="on"' : '') + '>' + w.l + '</button>').join('');
+    wins.onclick = async e => {
+        const b = e.target.closest('button'); if (!b) return;
+        wins.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on'); winSec = +b.dataset.s;
+        await seedCharts(); paint();
     };
-    const pollSnap = async () => { const d=await get('/api/snapshot'); if(!d){pConn.textContent='offline';pConn.className='pill bad';return;} pConn.textContent='online';pConn.className='pill ok'; vtag.textContent=d.source||'?'; pCam.className='pill '+(String(d.source).includes('yolo')?'ok':'warn'); };
-    const pollLlm = async () => { const d=await get('/api/llm/stats'); if(!d){pLlm.textContent='llm off';pLlm.className='pill bad';return;} pLlm.textContent='llm '+Math.round(d.avg_latency_ms/1000)+'s'; pLlm.className='pill ok'; };
-    const pollAct = async () => { const d=await get('/api/activity?limit=20'); act.innerHTML=(d?.length?d.slice().reverse():[]).map(e=>{const dd=e.data||{};const m=dd.message||dd.label||dd.name||dd.question||'';return '<li><span class="t">'+ts(e.timestamp)+'</span><span class="tag'+(e.topic==='action_executed'?' act':'')+'">'+e.topic.replace(/_/g,' ')+'</span><span>'+esc(String(m))+'</span></li>';}).join('')||'<li>no activity</li>'; };
-    const pollLogs = async () => { const o=await get('/api/objects?limit=20'), s=await get('/api/sounds?limit=15');
-        obj.innerHTML=(o?.length?o.slice().reverse():[]).map(e=>'<li><span class="t">'+ts(e.timestamp)+'</span><span class="lbl obj">'+e.label+'</span><span>'+pc(e.confidence)+'%</span></li>').join('')||'<li>waiting</li>';
-        snd.innerHTML=(s?.length?s.slice().reverse():[]).map(e=>'<li><span class="t">'+ts(e.timestamp)+'</span><span class="lbl snd">'+e.label+'</span><span>'+pc(e.confidence)+'%</span></li>').join('')||'<li>waiting</li>'; };
-    const pollRules = async () => { const d=await get('/rules'); rules.innerHTML=(d?.length?d:[]).map(r=>'<li><div><div class="name">'+r.name+'</div><div style="color:var(--muted);margin-top:2px">'+r.when_text+' → '+r.then_text+'</div></div><button class="del" data-n="'+r.name+'">×</button></li>').join('')||'<li>none</li>';
-        rules.querySelectorAll('.del').forEach(b=>b.onclick=async()=>{await fetch(API+'/rules/'+encodeURIComponent(b.dataset.n),{method:'DELETE'});pollRules();pollAct();}); };
-    cmdBtn.onclick = async () => { const c=cmdIn.value.trim(); if(!c)return; cmdBtn.disabled=true; cmdFb.textContent='teaching...';
-        try{const r=await fetch(API+'/api/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:c})}); if(r.ok){cmdIn.value='';cmdFb.textContent='✓ created';pollRules();pollAct();}else cmdFb.textContent='✗ failed';}catch{cmdFb.textContent='✗ error';} cmdBtn.disabled=false; };
-    let askT=null;
-    askBtn.onclick = async () => { const q=askIn.value.trim(); if(!q)return; askBtn.disabled=true; const t0=Date.now();
-        askFb.innerHTML='<div class="ask-go"><span class="spin"></span><span id="askT">Thinking... 0s (up to ~2 min)</span></div>';
-        askT=setInterval(()=>{const el=document.getElementById('askT');if(el)el.textContent='Thinking... '+Math.floor((Date.now()-t0)/1000)+'s (up to ~2 min)';},1000);
-        try{const r=await fetch(API+'/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})}); clearInterval(askT);
-            if(r.ok){const j=await r.json(); askIn.value=''; askFb.innerHTML='<div class="ask-out">'+esc(j.answer)+'</div><div class="ask-meta">'+(j.used_llm?'LLM':'digest')+' · '+Math.round((j.latency_ms||0)/1000)+'s · '+(j.events_scanned||0)+' events</div>'; pollAct();}
-            else askFb.innerHTML='<div class="ask-go" style="color:var(--red)">✗ failed HTTP '+r.status+'</div>';
-        }catch{clearInterval(askT); askFb.innerHTML='<div class="ask-go" style="color:var(--red)">✗ timeout</div>';} askBtn.disabled=false; };
-    vid.onerror = function(){ this.src=API+'/api/video?'+Date.now(); };
-    setInterval(pollSens,2000); setInterval(pollSnap,2000); setInterval(pollAct,2000); setInterval(pollLogs,1500); setInterval(pollRules,5000); setInterval(pollLlm,10000);
-    pollSens(); pollSnap(); pollAct(); pollLogs(); pollRules(); pollLlm();
+
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.onclick = () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+            tab.classList.add('on');
+            const which = tab.dataset.tab;
+            obj.style.display = which === 'obj' ? '' : 'none';
+            snd.style.display = which === 'snd' ? '' : 'none';
+        };
+    });
+
+    const chartOpts = (color) => ({
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 280, easing: 'easeOutQuad' },
+        layout: { padding: { left: 2, right: 8, top: 6, bottom: 4 } },
+        scales: {
+            x: {
+                display: true,
+                ticks: { maxTicksLimit: 4, font: { size: 8 }, color: '#555' },
+                grid: { display: false },
+            },
+            y: {
+                display: true,
+                ticks: { maxTicksLimit: 3, font: { size: 8 }, color: '#555' },
+                grid: { color: 'rgba(255,255,255,0.05)' },
+                grace: '15%',
+            },
+        },
+        plugins: { legend: { display: false } },
+        elements: { line: { borderCapStyle: 'round', borderJoinStyle: 'round' } },
+    });
+
+    const mk = (id, color) => new Chart(document.getElementById(id).getContext('2d'), {
+        type: 'line',
+        data: { labels: [], datasets: [{ data: [], borderColor: color, backgroundColor: color + '18', fill: true, tension: 0.35, pointRadius: 0, borderWidth: 1.5 }] },
+        options: chartOpts(color),
+    });
+    const ch = { temperature_c: mk('cT', '#00ff88'), distance_cm: mk('cD', '#66ccff'), movement_intensity: mk('cM', '#ffaa00') };
+    const valEls = { temperature_c: tVal, distance_cm: dVal, movement_intensity: mVal };
+
+    const trim = () => { const cut = Date.now() / 1000 - winSec; for (const k of Object.keys(bufs)) while (bufs[k].length && bufs[k][0].t < cut) bufs[k].shift(); };
+
+    const paint = () => {
+        for (const [k, c] of Object.entries(ch)) {
+            const pts = bufs[k] || [];
+            c.data.labels = pts.map(p => new Date(p.t * 1000).toLocaleTimeString([], { minute: '2-digit', second: '2-digit' }));
+            c.data.datasets[0].data = pts.map(p => p.v);
+            if (pts.length && valEls[k]) valEls[k].textContent = pts[pts.length - 1].v.toFixed(k === 'distance_cm' ? 0 : 3);
+            c.update('active');
+        }
+    };
+
+    async function seedCharts() {
+        const keys = Object.keys(bufs);
+        const hist = await Promise.all(keys.map(k => get('/api/sensors/history?sensor=' + k + '&window=' + winSec)));
+        keys.forEach((k, i) => {
+            bufs[k] = (hist[i] || []).map(p => ({ t: p.timestamp, v: p.value }));
+        });
+        trim();
+    }
+
+    async function pollSensors() {
+        const d = await get('/api/sensors');
+        if (!d?.readings) return;
+        const r = d.readings, now = d.timestamp || Date.now() / 1000;
+        if (r.temperature_c != null) tLive.textContent = r.temperature_c.toFixed(1);
+        if (r.distance_cm != null) dLive.textContent = Math.round(r.distance_cm);
+        if (r.movement_intensity != null) mLive.textContent = r.movement_intensity.toFixed(3);
+        const live = d.source === 'live';
+        srcLine.textContent = 'source: ' + (live ? 'STM32 live' : 'mock fallback') + ' · every ' + (d.interval_s || 1) + 's';
+        srcLine.className = 'src-line' + (live ? ' live' : '');
+        pMcu.className = 'pill ' + (live ? 'ok' : 'warn');
+        pMcu.textContent = live ? 'mcu live' : 'mcu mock';
+        for (const k of Object.keys(bufs)) {
+            if (r[k] == null) continue;
+            const b = bufs[k];
+            if (b.length && Math.abs(b[b.length - 1].t - now) < 0.25) continue;
+            b.push({ t: now, v: r[k] });
+        }
+        trim(); paint();
+    }
+
+    async function pollSnap() {
+        const d = await get('/api/snapshot');
+        if (!d) { pConn.textContent = 'offline'; pConn.className = 'pill bad'; return; }
+        pConn.textContent = 'online'; pConn.className = 'pill ok';
+        vtag.textContent = d.source || '?';
+        pCam.className = 'pill ' + (String(d.source).includes('yolo') ? 'ok' : 'warn');
+    }
+
+    async function pollRules() {
+        const d = await get('/rules');
+        const existing = window._wfExpanded || {};
+        if (!d?.length) { wfList.innerHTML = '<li style="color:var(--muted)">no automations yet</li>'; return; }
+        wfList.innerHTML = d.map(r => {
+            const id = 'tr-' + r.name.replace(/[^a-z0-9]/gi, '_');
+            const trig = (r.triggers || []).map(t => {
+                if (t.type === 'sensor') return '<span class="wf-badge sensor">' + t.value + ' ' + (t.sensor_op === 'lt' ? '<' : '>') + ' ' + t.sensor_threshold + '</span>';
+                return '<span class="wf-badge ' + t.type + '">' + t.type + ': ' + t.value + (t.time_range ? ' ' + t.time_range[0] + '-' + t.time_range[1] + 'h' : '') + '</span>';
+            }).join(' ');
+            const acts = (r.actions || []).map(a => '<span class="wf-badge">' + a.type + '</span>').join(' ');
+            const raw = r.llm_raw || '';
+            const exp = existing[id] || false;
+            return '<li class="wf-item"><div class="wf-body"><div class="wf-name">' + esc(r.name) + '</div><div style="margin:3px 0">' + trig + ' → ' + acts + '</div>' +
+                '<div class="wf-desc">when ' + esc(r.when_text) + ' → ' + esc(r.then_text) +
+                (raw ? ' <a href="#" class="wf-trace" data-id="' + id + '" style="color:var(--muted);font-size:10px">trace</a>' : '') + '</div>' +
+                (raw ? '<div class="trace' + (exp ? ' show' : '') + '" id="' + id + '"><div class="trace-step">LLM</div><div class="trace-json">' + esc(raw) +
+                '</div><div class="trace-step">Parsed</div><div class="trace-parsed">' + esc(JSON.stringify(r.triggers)) + ' → ' + esc(JSON.stringify(r.actions)) +
+                '</div></div>' : '') + '</div><button class="wf-del" data-n="' + esc(r.name) + '">×</button></li>';
+        }).join('');
+        wfList.querySelectorAll('.wf-del').forEach(b => b.onclick = async () => {
+            await fetch(API + '/rules/' + encodeURIComponent(b.dataset.n), { method: 'DELETE' });
+            pollRules(); pollAct();
+        });
+        wfList.querySelectorAll('.wf-trace').forEach(a => a.onclick = e => {
+            e.preventDefault();
+            const el = document.getElementById(a.dataset.id);
+            if (el) el.classList.toggle('show');
+            if (!window._wfExpanded) window._wfExpanded = {};
+            window._wfExpanded[a.dataset.id] = el?.classList.contains('show');
+        });
+    }
+
+    async function pollAct() {
+        const d = await get('/api/activity?limit=25');
+        act.innerHTML = (d?.length ? d.slice().reverse() : []).map(e => {
+            const dd = e.data || {};
+            const m = dd.message || dd.label || dd.name || dd.question || '';
+            return '<li><span class="t">' + ts(e.timestamp) + '</span><span class="tag' + (e.topic === 'action_executed' ? ' act' : '') + '">' + e.topic.replace(/_/g, ' ') + '</span><span>' + esc(String(m)) + '</span></li>';
+        }).join('') || '<li style="color:var(--muted)">no activity</li>';
+    }
+
+    async function pollLogs() {
+        const o = await get('/api/objects?limit=25'), s = await get('/api/sounds?limit=20');
+        obj.innerHTML = (o?.length ? o.slice().reverse() : []).map(e => '<li><span class="t">' + ts(e.timestamp) + '</span><span class="tag">' + e.label + '</span><span>' + pc(e.confidence) + '%</span></li>').join('') || '<li style="color:var(--muted)">waiting</li>';
+        snd.innerHTML = (s?.length ? s.slice().reverse() : []).map(e => '<li><span class="t">' + ts(e.timestamp) + '</span><span class="tag sound">' + e.label + '</span><span>' + pc(e.confidence) + '%</span></li>').join('') || '<li style="color:var(--muted)">waiting</li>';
+    }
+
+    async function pollLlm() {
+        const d = await get('/api/llm/stats');
+        if (!d) { pLlm.textContent = 'llm off'; pLlm.className = 'pill bad'; return; }
+        pLlm.textContent = 'llm ' + Math.round(d.avg_latency_ms / 1000) + 's';
+        pLlm.className = 'pill ok';
+    }
+
+    cmdBtn.onclick = async () => {
+        const c = cmdIn.value.trim(); if (!c) return;
+        cmdBtn.disabled = true; cmdFb.textContent = 'teaching...';
+        try {
+            const r = await fetch(API + '/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: c }) });
+            if (r.ok) { cmdIn.value = ''; cmdFb.textContent = '✓ rule created'; cmdFb.style.color = 'var(--accent)'; pollRules(); pollAct(); }
+            else { cmdFb.textContent = '✗ failed'; cmdFb.style.color = 'var(--red)'; }
+        } catch { cmdFb.textContent = '✗ error'; }
+        cmdBtn.disabled = false;
+    };
+
+    let askT = null;
+    askBtn.onclick = async () => {
+        const q = askIn.value.trim(); if (!q) return;
+        askBtn.disabled = true;
+        const t0 = Date.now();
+        askFb.innerHTML = '<div class="ask-go"><span class="spin"></span><span id="askT">Thinking... 0s</span></div>';
+        askT = setInterval(() => { const el = document.getElementById('askT'); if (el) el.textContent = 'Thinking... ' + Math.floor((Date.now() - t0) / 1000) + 's'; }, 1000);
+        try {
+            const r = await fetch(API + '/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q }) });
+            clearInterval(askT);
+            if (r.ok) {
+                const j = await r.json(); askIn.value = '';
+                askFb.innerHTML = '<div class="ask-out">' + esc(j.answer) + '</div><div class="fb">' + (j.used_llm ? 'LLM' : 'digest') + ' · ' + Math.round((j.latency_ms || 0) / 1000) + 's</div>';
+                pollAct();
+            } else askFb.innerHTML = '<span style="color:var(--red)">✗ failed</span>';
+        } catch { clearInterval(askT); askFb.innerHTML = '<span style="color:var(--red)">✗ timeout</span>'; }
+        askBtn.disabled = false;
+    };
+
+    vid.onerror = function() { this.src = API + '/api/video?' + Date.now(); };
+
+    async function tick() {
+        await Promise.all([pollSensors(), pollSnap(), pollAct(), pollLogs()]);
+    }
+
+    seedCharts().then(() => { paint(); tick(); pollRules(); pollLlm(); });
+    setInterval(tick, POLL_MS);
+    setInterval(pollRules, 5000);
+    setInterval(pollLlm, 10000);
 }
 </script>
 </body>
