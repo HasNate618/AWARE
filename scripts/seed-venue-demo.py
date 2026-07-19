@@ -50,10 +50,10 @@ async def main() -> None:
 
     if args.clear:
         for rule in await store.get_active():
-            name = str(rule.get("name", ""))
-            if name:
-                await store.deactivate(name)
-                print(f"cleared: {name}")
+            rule_id = int(rule.get("id", 0))
+            if rule_id:
+                await store.deactivate_by_id(rule_id)
+                print(f"cleared: {rule.get('name') or rule_id}")
 
     for cmd in commands:
         parsed = parse_rule_from_command(cmd)
@@ -76,7 +76,7 @@ async def main() -> None:
         then_parts: list[str] = []
         for action in parsed.actions:
             if action.type == "speak":
-                then_parts.append(f"say {action.params.get('text', '')}")
+                then_parts.append(action.params.get("text", "speak"))
             elif action.type == "led_flash":
                 then_parts.append(f"flash {action.params.get('color', '')}")
             elif action.type == "led_on":
