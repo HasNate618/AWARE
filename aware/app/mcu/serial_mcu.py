@@ -18,10 +18,39 @@ RPC_TIMEOUT = 1.0
 SENSOR_DEFAULTS: dict[str, float] = {
     "temperature_c": 22.0,
     "distance_cm": 100.0,
-    "motion": 0.0,
+    "movement_intensity": 0.05,
     "light": 500.0,
     "vibration": 0.0,
 }
+
+
+def _derive_movement_intensity(readings: list[SensorReading]) -> float | None:
+    """Compute movement intensity from legacy motion or accelerometer axes."""
+    by_name = {r.sensor: r.value for r in readings}
+    if "movement_intensity" in by_name:
+        return by_name["movement_intensity"]
+    if "motion" in by_name:
+        return by_name["motion"]
+    ax = by_name.get("accel_x")
+    ay = by_name.get("accel_y")
+    az = by_name.get("accel_z")
+    if ax is not None and ay is not None and az is not None:
+        import math
+
+        return max(0.0, math.sqrt(ax * ax + ay * ay + az * az) - 1.0)
+    return None
+
+
+def _normalize_readings(readings: list[SensorReading]) -> list[SensorReading]:
+    """Ensure movement_intensity is present and drop legacy motion key."""
+    now = readings[0].timestamp if readings else time.time()
+    intensity = _derive_movement_intensity(readings)
+    filtered = [r for r in readings if r.sensor != "motion"]
+    if intensity is not None and not any(r.sensor == "movement_intensity" for r in filtered):
+        filtered.append(
+            SensorReading(sensor="movement_intensity", value=float(intensity), timestamp=now)
+        )
+    return filtered
 
 
 def _pack_msg(msg: list[object]) -> bytes:
@@ -140,8 +169,8 @@ class SerialMCU:
             )
 
         if readings:
-            return readings
-        return self._mock.read_all()
+            return _normalize_readings(readings)
+        return _normalize_readings(self._mock.read_all())
 
     async def read_sensor(self, name: str) -> SensorReading | None:
         result = await self._rpc_call("read_sensor", name)
