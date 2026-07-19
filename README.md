@@ -1,6 +1,6 @@
 # A.W.A.R.E.
 
-**Autonomous Witness And Response Engine** — an edge AI agent that sees, hears, and responds to its environment. Built on the Arduino UNO Q ($80, Qualcomm Dragonwing QRB2210 + STM32U585).
+**Autonomous Witness And Response Engine** — an edge automation device that sees, hears, and responds to its environment. Built on the Arduino UNO Q ($80, Qualcomm Dragonwing QRB2210 + STM32U585).
 
 Users type commands like `when person detected say welcome` into a web dashboard. An on-device LLM parses the intent, and a rules engine executes it — all locally, no cloud, no internet required.
 
