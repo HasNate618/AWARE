@@ -121,8 +121,24 @@ class RulesStore:
             for row in rows
         ]
 
-    async def deactivate(self, name: str) -> None:
+    async def deactivate(self, name: str) -> bool:
         if not self._db:
             raise RuntimeError("Store not opened")
+        cursor = await self._db.execute(_DELETE, (name,))
+        await self._db.commit()
+        return int(cursor.rowcount or 0) > 0
+
+    async def deactivate_by_id(self, rule_id: int) -> str | None:
+        if not self._db:
+            raise RuntimeError("Store not opened")
+        cursor = await self._db.execute(
+            "SELECT name FROM rules WHERE id = ? AND active = 1",
+            (rule_id,),
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        name = str(row[0])
         await self._db.execute(_DELETE, (name,))
         await self._db.commit()
+        return name

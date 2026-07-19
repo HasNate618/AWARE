@@ -373,7 +373,7 @@ function init() {
                 (raw ? ' <a href="#" class="wf-trace" data-id="' + id + '" style="color:var(--muted);font-size:10px">trace</a>' : '') + '</div>' +
                 (raw ? '<div class="trace' + (exp ? ' show' : '') + '" id="' + id + '"><div class="trace-step">LLM</div><div class="trace-json">' + esc(raw) +
                 '</div><div class="trace-step">Parsed</div><div class="trace-parsed">' + esc(JSON.stringify(r.triggers)) + ' → ' + esc(JSON.stringify(r.actions)) +
-                '</div></div>' : '') + '</div><button type="button" class="wf-del" data-name="' + encodeURIComponent(r.name) + '">×</button></li>';
+                '</div></div>' : '') + '</div><button type="button" class="wf-del" data-id="' + r.id + '" title="Remove">×</button></li>';
         }).join('');
         wfList.querySelectorAll('.wf-trace').forEach(a => a.onclick = e => {
             e.preventDefault();
@@ -406,19 +406,26 @@ function init() {
         pLlm.className = 'pill ok';
     }
 
-    if (!wfList._delBound) {
-        wfList._delBound = true;
-        wfList.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.wf-del');
-            if (!btn) return;
-            e.preventDefault();
-            const name = btn.getAttribute('data-name');
-            if (!name) return;
-            await fetch(API + '/rules/' + name, { method: 'DELETE' });
+    wfList.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.wf-del');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const id = btn.getAttribute('data-id');
+        if (!id) return;
+        btn.disabled = true;
+        try {
+            const res = await fetch(API + '/api/rules/' + id, { method: 'DELETE' });
+            if (!res.ok) {
+                btn.disabled = false;
+                return;
+            }
             pollRules();
             pollAct();
-        });
-    }
+        } catch {
+            btn.disabled = false;
+        }
+    });
 
     let waitTimer = null;
     function startWait(fbEl, label) {

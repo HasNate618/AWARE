@@ -1,4 +1,4 @@
-from aware.app.parser.nl_parser import parse_rule
+from aware.app.parser.nl_parser import parse_rule, parse_rule_from_command
 
 
 def test_parse_sound_trigger() -> None:
@@ -32,3 +32,15 @@ def test_parse_telegram_action() -> None:
 def test_parse_no_match_defaults_to_log() -> None:
     rule = parse_rule("custom", "something random", "something else")
     assert any(a.type == "log" for a in rule.actions)
+
+
+def test_parse_rule_from_command_happy_hacking() -> None:
+    rule = parse_rule_from_command("when person detected say happy hacking")
+    assert any(t.type == "detection" and t.value == "person" for t in rule.triggers)
+    assert any(a.type == "speak" for a in rule.actions)
+    assert "happy hacking" in rule.actions[0].params.get("text", "").lower()
+
+
+def test_parse_rule_from_command_flash() -> None:
+    rule = parse_rule_from_command("when person detected flash green")
+    assert any(a.type == "led_flash" for a in rule.actions)

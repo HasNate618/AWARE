@@ -1,11 +1,23 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 
 from aware.app.parser import vocabulary as vocab
 
 logger = logging.getLogger(__name__)
+
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+_CMD_SPLIT = re.compile(r"\s+then\s+", re.IGNORECASE)
+_WHEN_ACTION_RE = re.compile(
+    r"^when\s+(.+?)\s+(say|speak|announce|play|flash|turn on|turn off|notify)\s+(.+)$",
+    re.IGNORECASE,
+)
+
+
+def _slugify(text: str) -> str:
+    return _SLUG_RE.sub("_", text.lower()).strip("_")[:50]
 
 
 @dataclass
@@ -139,3 +151,24 @@ def parse_rule(
         actions=parse_then(then),
         priority=priority,
     )
+
+
+def parse_rule_from_command(command: str) -> ParsedRule:
+    """Parse a full teach-style command without the LLM (when X then Y)."""
+    text = command.strip().rstrip(".")
+    when_raw = ""
+    then_raw = ""
+    if _CMD_SPLIT.search(text):
+        when_part, then_part = _CMD_SPLIT.split(text, maxsplit=1)
+        when_raw = when_part.strip()
+        then_raw = then_part.strip()
+    else:
+        match = _WHEN_ACTION_RE.match(text)
+        if not match:
+            return ParsedRule(name=_slugify(text[:40]) or "rule", triggers=[], actions=[])
+        when_raw, verb, rest = match.group(1).strip(), match.group(2), match.group(3).strip()
+        then_raw = f"{verb} {rest}"
+    if when_raw.lower().startswith("when "):
+        when_raw = when_raw[5:].strip()
+    name = _slugify(when_raw) or "rule"
+    return parse_rule(name, when_raw, then_raw, raw=command)

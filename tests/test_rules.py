@@ -22,6 +22,19 @@ async def test_deactivate(store: RulesStore) -> None:
     assert len(rules) == 0
 
 
+async def test_deactivate_by_id(store: RulesStore) -> None:
+    await store.add("r2", "a", "b", "normal", [], [])
+    rules = await store.get_active()
+    rule_id = int(rules[0]["id"])
+    name = await store.deactivate_by_id(rule_id)
+    assert name == "r2"
+    assert len(await store.get_active()) == 0
+
+
+async def test_deactivate_missing_returns_false(store: RulesStore) -> None:
+    assert await store.deactivate("no_such_rule") is False
+
+
 async def test_unique_name_with_suffix(store: RulesStore) -> None:
     await store.add("dup", "a", "b", "normal", [], [])
     final = await store.add("dup", "c", "d", "normal", [], [])

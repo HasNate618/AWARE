@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -508,13 +508,34 @@ async def list_rules() -> list[dict[str, object]]:
     return await store.get_active()
 
 
+@app.delete("/api/rules/{rule_id:int}")
+async def delete_rule_by_id(rule_id: int) -> dict[str, str]:
+    """Deactivate a rule by database id (reliable for all rule names)."""
+    store: RulesStore = app.state.store
+    bus: EventBus = app.state.bus
+    name = await store.deactivate_by_id(rule_id)
+    if name is None:
+        raise HTTPException(status_code=404, detail="rule not found")
+    await bus.publish("rules", {"event": "deleted", "name": name, "id": rule_id})
+    logger.info("Rule deactivated: %s (id=%d)", name, rule_id)
+    return {"status": "deleted", "name": name, "id": str(rule_id)}
+
+
 @app.delete("/rules/{name}")
 async def delete_rule(name: str) -> dict[str, str]:
     """Deactivate a rule by name."""
+    from urllib.parse import unquote
+
     store: RulesStore = app.state.store
-    await store.deactivate(name)
-    logger.info("Rule deactivated: %s", name)
-    return {"status": "deleted", "name": name}
+    bus: EventBus = app.state.bus
+    decoded = unquote(name)
+    if not decoded:
+        raise HTTPException(status_code=400, detail="rule name required")
+    if not await store.deactivate(decoded):
+        raise HTTPException(status_code=404, detail="rule not found")
+    await bus.publish("rules", {"event": "deleted", "name": decoded})
+    logger.info("Rule deactivated: %s", decoded)
+    return {"status": "deleted", "name": decoded}
 
 
 class CommandRequest(BaseModel):
