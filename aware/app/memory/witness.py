@@ -146,11 +146,68 @@ _LLM_JUNK_RE = re.compile(
     r"^\s*\|\s*name\s*\|)",
 )
 
+_INVENTED_DETAIL_RE = re.compile(
+    r"(?i)\b(backpack|laptop|smartphone|hoodie|sunglasses|man with|woman with|wearing)\b"
+)
+
+
+def is_hallucinated_narrative(text: str) -> bool:
+    """Obvious fiction — roleplay, dialogue, or details we never observed."""
+    narrative = text.strip()
+    if '"' in narrative or "''" in narrative:
+        return True
+    lower = narrative.lower()
+    if re.search(r"\bi['']?m a\b", lower):
+        return True
+    return bool(_INVENTED_DETAIL_RE.search(narrative))
+
+
+def narrative_grounded_in_brief(brief: WitnessBrief, narrative: str) -> bool:
+    """True when LLM prose matches what the brief actually recorded."""
+    if is_hallucinated_narrative(narrative):
+        return False
+
+    lower = narrative.lower()
+    visitors = len(brief.visitor_times)
+    sounds = len(brief.sounds)
+
+    denies_people = any(
+        phrase in lower
+        for phrase in (
+            "was empty",
+            "booth was empty",
+            "see no one",
+            "no one was",
+            "no one stopped",
+            "no one here",
+            "nobody",
+            "nothing happened",
+        )
+    )
+    mentions_audio = any(
+        word in lower for word in ("heard", "speech", "sound", "voice", "talk", "noise")
+    )
+    mentions_people = any(
+        word in lower
+        for word in ("visitor", "person", "people", "passed", "walked", "stopped", "someone")
+    )
+
+    if visitors > 0 and denies_people:
+        return False
+    quiet_claim = any(word in lower for word in ("silent", "stayed quiet", "was quiet", "no one"))
+    if sounds > 0 and not mentions_audio and quiet_claim:
+        return False
+    if visitors > 0 and not mentions_people:
+        return False
+    return not (sounds > 0 and visitors == 0 and not mentions_audio)
+
 
 def is_ai_narrative(text: str) -> bool:
     """True when text looks like LLM prose, not a raw digest or witness log dump."""
     narrative = text.strip()
     if len(narrative) < 12 or len(narrative) > 280:
+        return False
+    if is_hallucinated_narrative(narrative):
         return False
     if _LLM_JUNK_RE.search(narrative):
         return False
@@ -486,6 +543,11 @@ def summaries_for_witness_display(
             continue
         if _is_template_prose(narrative):
             text = narrative
+            ai = False
+        elif is_hallucinated_narrative(narrative):
+            text = witness_prose_from_log_text(narrative)
+            if not text:
+                continue
             ai = False
         elif is_ai_narrative(narrative):
             text = narrative

@@ -1,7 +1,10 @@
 from aware.app.memory.witness import (
     WITNESS_SOUND_LABELS,
+    build_witness_brief,
     build_witness_log,
     is_ai_narrative,
+    is_hallucinated_narrative,
+    narrative_grounded_in_brief,
     summaries_for_witness_display,
     witness_log_to_text,
     witness_prose_from_events,
@@ -55,6 +58,28 @@ def test_witness_log_to_text_caps_lines() -> None:
 def test_witness_sound_labels_cover_venue_map() -> None:
     assert "speech" in WITNESS_SOUND_LABELS
     assert "doorbell" in WITNESS_SOUND_LABELS
+
+
+def test_is_hallucinated_narrative() -> None:
+    assert is_hallucinated_narrative('"I\'m a security witness. I see no one here."')
+    assert is_hallucinated_narrative("A man with a backpack and laptop walked by.")
+    assert not is_hallucinated_narrative("Someone passed the booth and speech was heard.")
+
+
+def test_narrative_grounded_in_brief() -> None:
+    events = build_witness_log(
+        [
+            _event(100.0, "sound", {"label": "speech"}),
+            _event(110.0, "sound", {"label": "speech"}),
+        ]
+    )
+    brief = build_witness_brief(events, 100.0, 200.0)
+    assert brief is not None
+    assert not narrative_grounded_in_brief(brief, "A quiet few minutes — the booth was empty.")
+    assert narrative_grounded_in_brief(
+        brief,
+        "Speech was heard in the space a couple of times.",
+    )
 
 
 def test_is_ai_narrative_rejects_digest() -> None:

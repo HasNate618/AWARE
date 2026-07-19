@@ -12,6 +12,7 @@ from aware.app.memory.witness import (
     build_witness_brief,
     build_witness_log,
     is_ai_narrative,
+    narrative_grounded_in_brief,
     witness_brief_to_text,
     witness_log_to_text,
     witness_prose_from_events,
@@ -98,11 +99,15 @@ class MemorySummarizer:
                 async with asyncio.timeout(self._llm_timeout):
                     async with self._llm_lock:
                         llm_text = await self._llm.summarize_period(brief_text)
-                if is_ai_narrative(llm_text):
+                if (
+                    brief
+                    and is_ai_narrative(llm_text)
+                    and narrative_grounded_in_brief(brief, llm_text)
+                ):
                     narrative = llm_text
                     used_llm = True
                 else:
-                    logger.warning("LLM summary rejected — using narrative fallback")
+                    logger.warning("LLM summary rejected — not grounded in scene brief")
             except Exception:
                 logger.exception("LLM summarization failed — using witness log fallback")
 
