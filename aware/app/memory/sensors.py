@@ -23,13 +23,3 @@ def should_log_sensor(
         return True
     threshold = SENSOR_THRESHOLDS.get(name, 0.0)
     return abs(value - last_val) >= threshold
-
-
-def should_log_chart(
-    name: str,
-    now: float,
-    last_chart: dict[str, float],
-    chart_interval: float,
-) -> bool:
-    """Return True if this sensor reading should be logged for dashboard charts."""
-    return now - last_chart.get(name, 0.0) >= chart_interval

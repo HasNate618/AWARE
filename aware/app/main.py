@@ -24,7 +24,7 @@ from aware.app.llm.stub import StubLLM
 from aware.app.mcu.bus import ActuatorBus, SensorBus
 from aware.app.memory.db import EventDB
 from aware.app.memory.query import answer_question
-from aware.app.memory.sensors import should_log_chart, should_log_sensor
+from aware.app.memory.sensors import should_log_sensor
 from aware.app.memory.summarizer import MemorySummarizer
 from aware.app.parser.nl_parser import parse_rule
 from aware.app.perception.interface import PerceptionSnapshot, PerceptionSource, SensorCache
@@ -111,7 +111,6 @@ async def sensor_loop(
 ) -> None:
     """Read sensors periodically; log to DB on interval or significant change."""
     last_logged: dict[str, tuple[float, float]] = {}
-    last_chart: dict[str, float] = {}
     try:
         while True:
             readings = await sensors.read_all()
@@ -135,22 +134,6 @@ async def sensor_loop(
                         },
                     )
                     last_logged[r.sensor] = (r.value, now)
-                    last_chart[r.sensor] = now
-                elif should_log_chart(
-                    r.sensor,
-                    now,
-                    last_chart,
-                    settings.sensor_chart_log_interval,
-                ):
-                    await db.log(
-                        f"sensor:{r.sensor}",
-                        {
-                            "label": r.sensor,
-                            "value": r.value,
-                            "unit": r.unit,
-                        },
-                    )
-                    last_chart[r.sensor] = now
             if sensor_cache is not None:
                 sensor_cache.update(sensor_data)
             await asyncio.sleep(settings.sensor_read_interval)
@@ -367,6 +350,16 @@ async def get_sensors() -> dict[str, object]:
         "timestamp": time.time(),
         "readings": dict(cache.readings),
     }
+
+
+@app.get("/api/sensors/history")
+async def get_sensor_history(
+    sensor: str,
+    window: float = 300,
+) -> list[dict[str, float]]:
+    """Return rolling in-memory sensor history for live dashboard charts."""
+    cache: SensorCache = app.state.sensor_cache
+    return cache.get_history(sensor, window_seconds=window)
 
 
 @app.get("/api/snapshot")

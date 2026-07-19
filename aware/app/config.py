@@ -43,8 +43,8 @@ class Settings(BaseSettings):
     mic_device: str = ""  # empty = auto-detect USB mic (alsa card)
     model_path: str = "models/yolov8n.onnx"
     yolo_confidence: float = 0.55
-    yolo_inference_interval: float = 0.33
-    video_stream_fps: float = 5.0
+    yolo_inference_interval: float = 0.25
+    video_stream_fps: float = 8.0
     mcu_serial_port: str = "/dev/ttyACM0"
     mcu_baud_rate: int = 115200
     db_path: str = "aware.db"
@@ -57,7 +57,6 @@ class Settings(BaseSettings):
     rules_tick_ms: int = 500
     sensor_read_interval: float = 2.0
     sensor_log_interval: float = 30.0
-    sensor_chart_log_interval: float = 10.0
     memory_summary_interval: int = 300
     memory_summary_enabled: bool = True
     memory_context_max_chars: int = 6000
